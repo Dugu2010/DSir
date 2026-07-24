@@ -92,7 +92,7 @@ class Bookmark(Base):
     course_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("courses.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
 
-    course: Mapped["Course"] = relationship("Course")
+    course: Mapped[Course] = relationship("Course")
 
 
 class Note(Base):

@@ -244,10 +244,12 @@ def test_execute_code(auth_client: TestClient) -> None:
     assert response.json()["exit_code"] == 0
 
 
-def test_get_profile_not_found(auth_client: TestClient) -> None:
+def test_get_profile_creates_default(auth_client: TestClient) -> None:
     response = auth_client.get("/api/v1/profiles/me")
-    # Profile is not created for the seeded user in conftest, so 404
-    assert response.status_code == 404
+    assert response.status_code == 200
+    data = response.json()
+    assert data["daily_goal_minutes"] == 30
+    assert data["preferred_language"] == "en"
 
 
 async def test_list_lessons(auth_client: TestClient, db_session: AsyncSession) -> None:

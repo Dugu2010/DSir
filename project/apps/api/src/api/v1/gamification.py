@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
-from uuid import UUID
+from datetime import UTC, date, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -11,11 +10,11 @@ from sqlalchemy.orm import selectinload
 from src.core.dependencies import get_current_active_user
 from src.db.session import get_db
 from src.models.content import Course
-from src.models.learning import Achievement, Enrollment, LessonProgress, UserAchievement, UserActivity
+from src.models.learning import Enrollment, LessonProgress, UserAchievement, UserActivity
 from src.models.user import User
 from src.schemas.common import PaginatedResponse
-from src.schemas.gamification import UserAchievementRead, UserStatsRead
 from src.schemas.content import CourseRead
+from src.schemas.gamification import UserAchievementRead, UserStatsRead
 from src.services.gamification import _calculate_streak, _ensure_profile
 
 router = APIRouter()
@@ -68,7 +67,10 @@ async def get_my_stats(
 
     return UserStatsRead(
         xp=profile.xp,
-        current_streak=_calculate_streak(profile.current_streak, profile.last_activity_date.date() if profile.last_activity_date else None),
+        current_streak=_calculate_streak(
+            profile.current_streak,
+            profile.last_activity_date.date() if profile.last_activity_date else None,
+        ),
         longest_streak=profile.longest_streak,
         last_activity_date=profile.last_activity_date,
         daily_goal_minutes=profile.daily_goal_minutes,

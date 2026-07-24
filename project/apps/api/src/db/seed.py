@@ -7,7 +7,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import AsyncSessionLocal
 from src.models.content import Concept, Course, Lesson, Roadmap, RoadmapCourse
 
-
 _CODE_EXAMPLES: dict[str, list[tuple[str, str]]] = {
     "Python": [
         ("python", "# Variables and data types\nname = 'Alice'\nage = 30\nprint(f'{name} is {age}')"),
@@ -323,7 +322,7 @@ def _build_module_description(module_title: str, course_title: str) -> str:
     return f"{module_title} in {course_title}. Learn through guided lessons, examples, and practice exercises."
 
 
-def _seed_course(db: AsyncSession, course_data: dict[str, Any]) -> Course:
+async def _seed_course(db: AsyncSession, course_data: dict[str, Any]) -> Course:
     modules = course_data.pop("modules")
     language = course_data["programming_language"]
     module_titles: list[str] = modules
@@ -336,7 +335,7 @@ def _seed_course(db: AsyncSession, course_data: dict[str, Any]) -> Course:
         is_published=True,
     )
     db.add(course)
-    db.flush()
+    await db.flush()
 
     total_duration = 0
     for module_index, module_title in enumerate(modules, start=1):
@@ -350,7 +349,7 @@ def _seed_course(db: AsyncSession, course_data: dict[str, Any]) -> Course:
             prerequisites=[],
         )
         db.add(concept)
-        db.flush()
+        await db.flush()
 
         for lesson_index in range(1, 4):
             lesson_title = f"{module_title} - Part {lesson_index}"

@@ -5,7 +5,6 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from src.core.dependencies import get_current_active_user, require_admin
 from src.core.security import get_password_hash

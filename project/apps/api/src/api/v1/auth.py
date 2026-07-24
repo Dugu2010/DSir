@@ -20,7 +20,14 @@ from src.core.security import (
 )
 from src.db.session import get_db
 from src.models.user import RefreshToken, User, UserRole
-from src.schemas.auth import ChangePasswordRequest, LoginRequest, LogoutRequest, RefreshRequest, RegisterRequest, TokenPair
+from src.schemas.auth import (
+    ChangePasswordRequest,
+    LoginRequest,
+    LogoutRequest,
+    RefreshRequest,
+    RegisterRequest,
+    TokenPair,
+)
 from src.schemas.user import UserRead
 
 router = APIRouter()

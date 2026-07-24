@@ -208,7 +208,7 @@ async def continue_course(
         select(LessonProgress.lesson_id).where(
             LessonProgress.user_id == current_user.id,
             LessonProgress.is_completed.is_(True),
-            LessonProgress.lesson_id.in_([l.id for l in lessons]),
+            LessonProgress.lesson_id.in_([lesson.id for lesson in lessons]),
         )
     )
     completed_ids = {row[0] for row in completed_result.all()}

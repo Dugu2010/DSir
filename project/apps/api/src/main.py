@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from src.api.v1.router import api_router
-from src.core.config import settings
+from src.core.config import parse_cors_origins, settings
 from src.db.session import async_engine
 from src.models import *  # noqa: F401,F403 - registers models with Base.metadata
 
@@ -40,7 +40,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS,
+    allow_origins=parse_cors_origins(settings.CORS_ORIGINS),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["*"],

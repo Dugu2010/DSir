@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.learning import UserProfile
-from src.models.user import User
+from src.models.user import User, UserProfile
 
 
 def _today() -> date:

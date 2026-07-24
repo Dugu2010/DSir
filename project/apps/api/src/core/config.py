@@ -1,6 +1,24 @@
 from __future__ import annotations
 
+import json
+from typing import Any
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def parse_cors_origins(value: Any) -> list[str]:
+    """Parse CORS_ORIGINS from a JSON list or comma-separated string."""
+    if not isinstance(value, str):
+        return value if isinstance(value, list) else []
+    stripped = value.strip()
+    if stripped.startswith("["):
+        try:
+            parsed = json.loads(stripped)
+            if isinstance(parsed, list):
+                return [str(item).strip() for item in parsed if str(item).strip()]
+        except json.JSONDecodeError:
+            pass
+    return [origin.strip() for origin in value.split(",") if origin.strip()]
 
 
 class Settings(BaseSettings):
@@ -18,7 +36,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
 
     # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    CORS_ORIGINS: str = "http://localhost:3000"
 
     # AI
     AI_DEFAULT_PROVIDER: str = "mock"
