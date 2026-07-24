@@ -5,7 +5,6 @@ from datetime import UTC, date, datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from src.models.learning import UserProfile
 from src.models.user import User, UserProfile
 
 

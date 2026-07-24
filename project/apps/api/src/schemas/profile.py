@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -14,7 +15,7 @@ class ProfileUpdate(BaseModel):
 
 
 class ProfileRead(BaseModel):
-    user_id: str
+    user_id: uuid.UUID
     timezone: str | None = "UTC"
     daily_goal_minutes: int = 30
     preferred_language: str = "en"
