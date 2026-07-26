@@ -107,8 +107,8 @@ export default function ImportCoursePage() {
     setDragOver(false);
     const file = e.dataTransfer.files[0];
     if (file && file.type === "application/pdf") {
-      if (file.size > 50 * 1024 * 1024) {
-        alert("File is too large. Maximum size is 50 MB.");
+      if (file.size > 100 * 1024 * 1024) {
+        alert("File is too large. Maximum size is 100 MB.");
         return;
       }
       setPdfFile(file);
@@ -119,8 +119,8 @@ export default function ImportCoursePage() {
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 50 * 1024 * 1024) {
-        alert("File is too large. Maximum size is 50 MB.");
+      if (file.size > 100 * 1024 * 1024) {
+        alert("File is too large. Maximum size is 100 MB.");
         return;
       }
       setPdfFile(file);
@@ -344,7 +344,7 @@ export default function ImportCoursePage() {
                           Drop your PDF here or click to browse
                         </p>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          Supports .pdf files up to 50 MB
+                          Supports .pdf files up to 100 MB
                         </p>
                       </>
                     )}

@@ -364,8 +364,8 @@ async def import_pdf(
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
     content_bytes = await file.read()
-    if len(content_bytes) > 50 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="PDF file exceeds the 50 MB size limit")
+    if len(content_bytes) > 100 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="PDF file exceeds the 100 MB size limit")
 
     try:
         import fitz
