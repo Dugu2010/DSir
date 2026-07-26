@@ -546,3 +546,30 @@ export async function importContent(data: {
   const res = await apiClient.post<ImportContentResponse>("/ai/import-content", data);
   return res.data;
 }
+
+export async function importPdf(data: {
+  file: File;
+  course_title?: string;
+  programming_language?: string;
+  technology?: string;
+  category?: string;
+  difficulty?: string;
+  instructor?: string;
+  provider?: string;
+  api_key?: string;
+  api_url?: string;
+}) {
+  const formData = new FormData();
+  formData.append("file", data.file);
+  if (data.course_title) formData.append("course_title", data.course_title);
+  formData.append("programming_language", data.programming_language ?? "Python");
+  formData.append("technology", data.technology ?? "Python");
+  formData.append("category", data.category ?? "Backend");
+  formData.append("difficulty", data.difficulty ?? "beginner");
+  if (data.provider) formData.append("provider", data.provider);
+  if (data.api_key) formData.append("api_key", data.api_key);
+  if (data.api_url) formData.append("api_url", data.api_url);
+
+  const res = await apiClient.post<ImportContentResponse>("/ai/import-pdf", formData);
+  return res.data;
+}

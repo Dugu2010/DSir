@@ -1,13 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
-import { ArrowLeft, BookOpen, FileText, Key, Loader2, Sparkles, CheckCircle2, AlertCircle } from "lucide-react";
-import { importContent, ImportContentResponse } from "@/lib/api";
+import {
+  ArrowLeft,
+  BookOpen,
+  FileText,
+  Key,
+  Loader2,
+  Sparkles,
+  CheckCircle2,
+  AlertCircle,
+  Upload,
+  File,
+  X,
+} from "lucide-react";
+import { importContent, importPdf, ImportContentResponse } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ErrorMessage } from "@/components/ui/error-message";
+import { cn } from "@/lib/utils";
 
 const languages = ["Python", "JavaScript", "TypeScript", "HTML/CSS", "SQL", "Go", "Rust", "Java", "C++", "C#"];
 const categories = ["Frontend", "Backend", "Full Stack", "DevOps", "AI", "Mobile"];
@@ -15,6 +27,8 @@ const difficulties = ["beginner", "intermediate", "advanced"];
 
 export default function ImportCoursePage() {
   const [sourceText, setSourceText] = useState("");
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [inputMode, setInputMode] = useState<"text" | "pdf">("text");
   const [courseTitle, setCourseTitle] = useState("");
   const [language, setLanguage] = useState("Python");
   const [category, setCategory] = useState("Backend");
@@ -22,10 +36,25 @@ export default function ImportCoursePage() {
   const [apiKey, setApiKey] = useState("");
   const [apiUrl, setApiUrl] = useState("https://shulker.in/api/colide_api_gateway-v1.0/");
   const [result, setResult] = useState<ImportContentResponse | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
 
   const mutation = useMutation({
-    mutationFn: () =>
-      importContent({
+    mutationFn: async () => {
+      if (inputMode === "pdf" && pdfFile) {
+        return importPdf({
+          file: pdfFile,
+          course_title: courseTitle || undefined,
+          programming_language: language,
+          technology: language,
+          category,
+          difficulty,
+          provider: "custom",
+          api_key: apiKey,
+          api_url: apiUrl,
+        });
+      }
+      return importContent({
         source_text: sourceText,
         course_title: courseTitle || undefined,
         programming_language: language,
@@ -35,7 +64,8 @@ export default function ImportCoursePage() {
         provider: "custom",
         api_key: apiKey,
         api_url: apiUrl,
-      }),
+      });
+    },
     onSuccess: (data) => {
       setResult(data);
     },
@@ -46,6 +76,36 @@ export default function ImportCoursePage() {
     setResult(null);
     mutation.mutate();
   };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file && file.type === "application/pdf") {
+      if (file.size > 50 * 1024 * 1024) {
+        alert("File is too large. Maximum size is 50 MB.");
+        return;
+      }
+      setPdfFile(file);
+      setInputMode("pdf");
+    }
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 50 * 1024 * 1024) {
+        alert("File is too large. Maximum size is 50 MB.");
+        return;
+      }
+      setPdfFile(file);
+      setInputMode("pdf");
+    }
+  };
+
+  const canSubmit = inputMode === "text"
+    ? sourceText.trim().length > 0 && apiKey.trim().length > 0
+    : pdfFile !== null && apiKey.trim().length > 0;
 
   return (
     <div className="mx-auto max-w-4xl space-y-8">
@@ -60,7 +120,7 @@ export default function ImportCoursePage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-card-foreground">Import Course</h1>
           <p className="text-muted-foreground">
-            Paste source text (book, article, or notes) and let AI turn it into a structured course
+            Upload a PDF or paste source text to create a structured course
           </p>
         </div>
       </div>
@@ -69,24 +129,120 @@ export default function ImportCoursePage() {
         {/* Form */}
         <div className="lg:col-span-3">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Source text */}
-            <div className="rounded-2xl border border-border bg-card p-6">
-              <label className="flex items-center gap-2 text-lg font-semibold text-card-foreground">
-                <FileText className="h-5 w-5 text-primary" />
-                Source Text
-              </label>
-              <p className="mb-3 mt-1 text-sm text-muted-foreground">
-                Paste the content from your book, PDF, or notes here
-              </p>
-              <textarea
-                value={sourceText}
-                onChange={(e) => setSourceText(e.target.value)}
-                rows={12}
-                placeholder="Paste your content here..."
-                className="w-full rounded-xl border border-border bg-background p-4 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
-                required
-              />
+            {/* Input mode toggle */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setInputMode("text")}
+                className={cn(
+                  "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition",
+                  inputMode === "text"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-card text-card-foreground hover:bg-accent"
+                )}
+              >
+                <FileText className="h-4 w-4" />
+                Paste Text
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode("pdf")}
+                className={cn(
+                  "flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition",
+                  inputMode === "pdf"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-card text-card-foreground hover:bg-accent"
+                )}
+              >
+                <Upload className="h-4 w-4" />
+                Upload PDF
+              </button>
             </div>
+
+            {/* Text input */}
+            {inputMode === "text" && (
+              <div className="rounded-2xl border border-border bg-card p-6">
+                <label className="flex items-center gap-2 text-lg font-semibold text-card-foreground">
+                  <FileText className="h-5 w-5 text-primary" />
+                  Source Text
+                </label>
+                <p className="mb-3 mt-1 text-sm text-muted-foreground">
+                  Paste the content from your book, PDF, or notes here
+                </p>
+                <textarea
+                  value={sourceText}
+                  onChange={(e) => setSourceText(e.target.value)}
+                  rows={12}
+                  placeholder="Paste your content here..."
+                  className="w-full rounded-xl border border-border bg-background p-4 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
+                  required
+                />
+              </div>
+            )}
+
+            {/* PDF upload */}
+            {inputMode === "pdf" && (
+              <div className="rounded-2xl border border-border bg-card p-6">
+                <label className="flex items-center gap-2 text-lg font-semibold text-card-foreground">
+                  <Upload className="h-5 w-5 text-primary" />
+                  Upload PDF
+                </label>
+                <p className="mb-3 mt-1 text-sm text-muted-foreground">
+                  Upload a PDF file (book, handbook, or article)
+                </p>
+
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={cn(
+                    "flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed p-8 text-center transition",
+                    dragOver
+                      ? "border-primary bg-primary/5"
+                      : pdfFile
+                        ? "border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950"
+                        : "border-border bg-background hover:border-primary/50 hover:bg-accent/30"
+                  )}
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                  />
+                  {pdfFile ? (
+                    <div className="flex items-center gap-3">
+                      <File className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                      <div className="text-left">
+                        <p className="font-medium text-card-foreground">{pdfFile.name}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {(pdfFile.size / 1024 / 1024).toFixed(1)} MB
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setPdfFile(null); }}
+                        className="rounded-full p-1 text-muted-foreground hover:bg-background hover:text-card-foreground"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="mb-3 h-10 w-10 text-muted-foreground" />
+                      <p className="font-medium text-card-foreground">
+                        Drop your PDF here or click to browse
+                      </p>
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        Supports .pdf files up to 50 MB
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Course settings */}
             <div className="rounded-2xl border border-border bg-card p-6">
@@ -151,7 +307,7 @@ export default function ImportCoursePage() {
                 Your AI API Key
               </label>
               <p className="mb-3 mt-1 text-sm text-muted-foreground">
-                Paste your API key. It is sent only to process this request and is not stored on the server.
+                Your API key is sent directly to the AI provider and is not stored on this server.
               </p>
               <input
                 type="password"
@@ -172,19 +328,19 @@ export default function ImportCoursePage() {
 
             <Button
               type="submit"
-              disabled={mutation.isPending || !sourceText.trim() || !apiKey.trim()}
+              disabled={mutation.isPending || !canSubmit}
               className="w-full gap-2"
               size="lg"
             >
               {mutation.isPending ? (
                 <>
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  Generating course... This may take a minute
+                  {inputMode === "pdf" ? "Extracting PDF & " : ""}Generating course...
                 </>
               ) : (
                 <>
                   <Sparkles className="h-5 w-5" />
-                  Generate Course
+                  {inputMode === "pdf" ? "Upload & Generate Course" : "Generate Course"}
                 </>
               )}
             </Button>
@@ -193,7 +349,6 @@ export default function ImportCoursePage() {
 
         {/* Sidebar: Preview / Results */}
         <div className="lg:col-span-2">
-          {/* Loading state */}
           {mutation.isPending && (
             <div className="rounded-2xl border border-border bg-card p-6">
               <h3 className="flex items-center gap-2 text-lg font-semibold text-card-foreground">
@@ -208,12 +363,13 @@ export default function ImportCoursePage() {
                 <Skeleton className="h-4 w-3/4" />
               </div>
               <p className="mt-4 text-sm text-muted-foreground">
-                AI is analyzing the source text and structuring it into modules and lessons...
+                {inputMode === "pdf"
+                  ? "Extracting text from PDF then generating course structure..."
+                  : "AI is analyzing the source text and structuring it into modules and lessons..."}
               </p>
             </div>
           )}
 
-          {/* Error state */}
           {mutation.isError && (
             <div className="rounded-2xl border border-red-200 bg-red-50 p-6 dark:border-red-900 dark:bg-red-950">
               <div className="flex items-start gap-3">
@@ -228,7 +384,6 @@ export default function ImportCoursePage() {
             </div>
           )}
 
-          {/* Success state */}
           {result && !mutation.isPending && (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-900 dark:bg-emerald-950">
               <div className="flex items-start gap-3">
@@ -247,10 +402,8 @@ export default function ImportCoursePage() {
                         <strong>{result.course_title}</strong>
                       </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-emerald-700 dark:text-emerald-300">
-                        {result.modules_created} modules · {result.lessons_created} lessons
-                      </span>
+                    <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
+                      {result.modules_created} modules · {result.lessons_created} lessons
                     </div>
                   </div>
                   <div className="mt-6 flex gap-3">
@@ -265,6 +418,7 @@ export default function ImportCoursePage() {
                         setResult(null);
                         setSourceText("");
                         setCourseTitle("");
+                        setPdfFile(null);
                       }}
                       variant="secondary"
                       className="gap-2"
@@ -277,7 +431,6 @@ export default function ImportCoursePage() {
             </div>
           )}
 
-          {/* Empty state */}
           {!mutation.isPending && !mutation.isError && !result && (
             <div className="rounded-2xl border border-dashed border-border bg-card/50 p-8 text-center">
               <Sparkles className="mx-auto h-12 w-12 text-muted-foreground" />
@@ -285,9 +438,9 @@ export default function ImportCoursePage() {
                 Ready to import
               </h3>
               <p className="mt-2 text-sm text-muted-foreground">
-                Paste your source text and API key, then click &quot;Generate Course&quot;.
-                The AI will analyze the content and create a structured course
-                with modules, lessons, quizzes, and exercises.
+                {inputMode === "pdf"
+                  ? "Upload a PDF file and enter your API key to generate a course."
+                  : "Paste your source text and API key, then click Generate Course."}
               </p>
             </div>
           )}

@@ -5,7 +5,7 @@ import uuid
 from collections.abc import AsyncGenerator
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -103,18 +103,8 @@ _COURSE_IMPORT_SYSTEM_PROMPT = (
 )
 
 
-@router.post("/import-content", response_model=ImportContentResponse)
-async def import_content(
-    data: ImportContentRequest,
-    db: AsyncSession = Depends(get_db),
-    _current_user: User = Depends(require_content_creator),
-    _rate_limit: None = Depends(RateLimiter("5/minute")),
-) -> ImportContentResponse:
-    """Import and transform content source text into a full course with modules and lessons."""
-    if not data.source_text.strip():
-        raise HTTPException(status_code=400, detail="Source text is required")
-
-    # Build the system and user messages
+async def _run_import(data: ImportContentRequest, db: AsyncSession) -> ImportContentResponse:
+    """Shared logic: call AI with source text, parse response, create course in DB."""
     messages = [
         Message(
             role=Role.SYSTEM,
@@ -154,7 +144,6 @@ async def import_content(
     course_title = parsed.get("title", data.course_title or "Imported Course")
     course_slug = _to_slug(course_title)
 
-    # Check slug uniqueness
     existing = await db.execute(select(Course).where(Course.slug == course_slug))
     if existing.scalar_one_or_none():
         course_slug = f"{course_slug}-{uuid.uuid4().hex[:6]}"
@@ -246,6 +235,86 @@ async def import_content(
         lessons_created=lessons_created,
         message=f"Course '{course.title}' created with {modules_created} modules and {lessons_created} lessons.",
     )
+
+
+@router.post("/import-content", response_model=ImportContentResponse)
+async def import_content(
+    data: ImportContentRequest,
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(require_content_creator),
+    _rate_limit: None = Depends(RateLimiter("5/minute")),
+) -> ImportContentResponse:
+    """Import and transform content source text into a full course with modules and lessons."""
+    if not data.source_text.strip():
+        raise HTTPException(status_code=400, detail="Source text is required")
+    return await _run_import(data, db)
+
+
+@router.post("/import-pdf", response_model=ImportContentResponse)
+async def import_pdf(
+    file: UploadFile = File(...),
+    course_title: str | None = Form(None),
+    programming_language: str = Form("Python"),
+    technology: str = Form("Python"),
+    category: str = Form("Backend"),
+    difficulty: str = Form("beginner"),
+    provider: str | None = Form(None),
+    api_key: str | None = Form(None),
+    api_url: str | None = Form(None),
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(require_content_creator),
+    _rate_limit: None = Depends(RateLimiter("5/minute")),
+) -> ImportContentResponse:
+    """Upload a PDF file and import its content as a course."""
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
+
+    # Check file size (max 50 MB)
+    content_bytes = await file.read()
+    if len(content_bytes) > 50 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="PDF file exceeds the 50 MB size limit")
+
+    # Extract text from PDF using PyMuPDF
+    try:
+        import fitz
+    except ImportError:
+        raise HTTPException(
+            status_code=500,
+            detail="PDF extraction library not installed. Contact the server administrator.",
+        ) from None
+
+    text_parts: list[str] = []
+    try:
+        doc = fitz.open(stream=content_bytes, filetype="pdf")
+        try:
+            for page in doc:
+                text_parts.append(page.get_text())
+        finally:
+            doc.close()
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to extract text from PDF: {exc!s}",
+        ) from None
+
+    source_text = "\n\n".join(text_parts).strip()
+    if not source_text:
+        raise HTTPException(status_code=400, detail="No text could be extracted from the PDF")
+
+    # Build ImportContentRequest and delegate to the existing import logic
+    import_data = ImportContentRequest(
+        source_text=source_text,
+        course_title=course_title,
+        programming_language=programming_language,
+        technology=technology,
+        category=category,
+        difficulty=difficulty,
+        provider=provider,
+        api_key=api_key,
+        api_url=api_url,
+    )
+
+    return await _run_import(import_data, db)
 
 
 @router.post("/chat", response_model=ChatResponse)
