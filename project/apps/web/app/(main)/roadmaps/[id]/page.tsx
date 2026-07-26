@@ -30,16 +30,16 @@ export default function RoadmapDetailPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white">{roadmap.title}</h1>
-        <p className="mt-2 max-w-3xl text-slate-600 dark:text-slate-400">{roadmap.description}</p>
+        <h1 className="text-3xl font-bold text-foreground">{roadmap.title}</h1>
+        <p className="mt-2 max-w-3xl text-muted-foreground">{roadmap.description}</p>
       </div>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-900">
-        <h2 className="text-xl font-bold text-slate-900 dark:text-white">Courses in this Roadmap</h2>
+      <section className="rounded-2xl border border-border bg-card p-6">
+        <h2 className="text-xl font-bold text-card-foreground">Courses in this Roadmap</h2>
         {coursesLoading ? (
           <div className="mt-4 space-y-3">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="h-16 animate-pulse rounded-lg bg-slate-200 dark:bg-slate-800" />
+              <div key={i} className="h-16 animate-pulse rounded-lg bg-muted" />
             ))}
           </div>
         ) : coursesData?.items.length ? (
@@ -47,20 +47,20 @@ export default function RoadmapDetailPage() {
             {coursesData.items.map((course, index) => (
               <li
                 key={course.id}
-                className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800"
+                className="flex items-center justify-between rounded-xl border border-border bg-background p-4"
               >
                 <div className="flex items-center gap-4">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
                     {index + 1}
                   </span>
                   <div>
-                    <h3 className="font-semibold text-slate-900 dark:text-white">{course.title}</h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">{course.technology}</p>
+                    <h3 className="font-semibold text-card-foreground">{course.title}</h3>
+                    <p className="text-sm text-muted-foreground">{course.programming_language ?? course.technology}</p>
                   </div>
                 </div>
                 <Link
                   href={`/courses/${course.id}`}
-                  className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+                  className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
                 >
                   View
                 </Link>
@@ -68,7 +68,7 @@ export default function RoadmapDetailPage() {
             ))}
           </ul>
         ) : (
-          <p className="mt-4 text-slate-600 dark:text-slate-400">No courses in this roadmap yet.</p>
+          <p className="mt-4 text-muted-foreground">No courses in this roadmap yet.</p>
         )}
       </section>
     </div>

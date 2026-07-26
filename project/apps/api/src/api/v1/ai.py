@@ -11,7 +11,18 @@ from src.ai.protocols import Message, Role
 from src.core.dependencies import get_current_active_user
 from src.core.rate_limit import RateLimiter
 from src.models.user import User
-from src.schemas.ai import ChatRequest, ChatResponse, CodeReviewRequest, CodeReviewResponse
+from src.schemas.ai import (
+    ChatRequest,
+    ChatResponse,
+    CodeReviewRequest,
+    CodeReviewResponse,
+    HintRequest,
+    HintResponse,
+    InterviewCoachRequest,
+    InterviewCoachResponse,
+    RoadmapGenerateRequest,
+    RoadmapGenerateResponse,
+)
 
 router = APIRouter()
 
@@ -26,7 +37,11 @@ async def chat(
         raise HTTPException(status_code=400, detail="Messages are required")
 
     manager = get_ai_manager()
-    messages = [
+    system_message = Message(
+        role=Role.SYSTEM,
+        content=PromptManager.get("mentor-system").render(context=data.context or "DSir programming lesson"),
+    )
+    messages = [system_message] + [
         Message(role=Role.USER if m.role == "user" else Role.ASSISTANT, content=m.content) for m in data.messages
     ]
 
@@ -49,7 +64,11 @@ async def chat_stream(
         raise HTTPException(status_code=400, detail="Messages are required")
 
     manager = get_ai_manager()
-    messages = [
+    system_message = Message(
+        role=Role.SYSTEM,
+        content=PromptManager.get("mentor-system").render(context=data.context or "DSir programming lesson"),
+    )
+    messages = [system_message] + [
         Message(role=Role.USER if m.role == "user" else Role.ASSISTANT, content=m.content) for m in data.messages
     ]
 
@@ -84,21 +103,81 @@ async def code_review(
     )
 
 
-@router.post("/hints", response_model=ChatResponse)
+@router.post("/hints", response_model=HintResponse)
 async def generate_hint(
-    concept_slug: str,
-    problem: str,
+    data: HintRequest,
     _current_user: User = Depends(get_current_active_user),
     _rate_limit: None = Depends(RateLimiter("30/minute")),
-) -> ChatResponse:
+) -> HintResponse:
     manager = get_ai_manager()
-    prompt = PromptManager.get("hint").render(concept=concept_slug, problem=problem)
+    prompt = PromptManager.get("hint").render(concept=data.concept, problem=data.problem)
 
     messages = [Message(role=Role.USER, content=prompt)]
     response = await manager.generate(messages)
-    return ChatResponse(
+    return HintResponse(hint=response.content)
+
+
+@router.post("/roadmap/generate", response_model=RoadmapGenerateResponse)
+async def generate_roadmap(
+    data: RoadmapGenerateRequest,
+    _current_user: User = Depends(get_current_active_user),
+    _rate_limit: None = Depends(RateLimiter("10/minute")),
+) -> RoadmapGenerateResponse:
+    manager = get_ai_manager()
+    prompt = PromptManager.get("roadmap-generator").render(
+        goal=data.goal,
+        experience=data.experience,
+        technologies=", ".join(data.technologies or []),
+    )
+    messages = [Message(role=Role.USER, content=prompt)]
+    response = await manager.generate(messages)
+
+    # Simple fallback parsing: treat response as title/desc/stages delimited by newlines.
+    lines = [line.strip() for line in response.content.strip().splitlines() if line.strip()]
+    title = lines[0] if lines else f"Roadmap to {data.goal}"
+    description = lines[1] if len(lines) > 1 else ""
+    stages = [line.lstrip("- ").lstrip("* ") for line in lines[2:]]
+
+    return RoadmapGenerateResponse(
+        title=title,
+        description=description,
+        stages=stages,
         content=response.content,
-        model=response.model,
-        prompt_tokens=response.prompt_tokens,
-        completion_tokens=response.completion_tokens,
+    )
+
+
+@router.post("/interview", response_model=InterviewCoachResponse)
+async def interview_coach(
+    data: InterviewCoachRequest,
+    _current_user: User = Depends(get_current_active_user),
+    _rate_limit: None = Depends(RateLimiter("20/minute")),
+) -> InterviewCoachResponse:
+    manager = get_ai_manager()
+    prompt = PromptManager.get("interview-coach").render(
+        role=data.role,
+        level=data.level,
+        topic=data.topic or "general",
+    )
+    messages = [Message(role=Role.USER, content=prompt)]
+    response = await manager.generate(messages)
+
+    # Basic parsing for question, hints, follow-ups.
+    lines = [line.strip() for line in response.content.strip().splitlines() if line.strip()]
+    question = next(
+        (
+            line
+            for line in lines
+            if not line.lower().startswith("hint") and not line.lower().startswith("follow")
+        ),
+        response.content,
+    )
+    hints = [line.lstrip("- ").lstrip("* ") for line in lines if line.lower().startswith("hint")]
+    follow_ups = [
+        line.lstrip("- ").lstrip("* ") for line in lines if line.lower().startswith("follow")
+    ]
+
+    return InterviewCoachResponse(
+        question=question,
+        hints=hints or ["Think about the core concepts related to this role."],
+        follow_ups=follow_ups or ["Can you explain your reasoning?"],
     )

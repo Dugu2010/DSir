@@ -7,6 +7,7 @@ import { useTheme } from "next-themes";
 import { AlertCircle, Check, Loader2, Moon, Sun, Trash2 } from "lucide-react";
 import { changePassword, deleteAccount, fetchMe, fetchProfile, logout, updateProfile } from "@/lib/api";
 import { useAuthStore } from "@/hooks/use-auth";
+import { useApiError } from "@/hooks/use-api-error";
 import { Button } from "@/components/ui/button";
 import { Card, CardTitle } from "@/components/ui/card";
 import { ErrorMessage } from "@/components/ui/error-message";
@@ -19,6 +20,12 @@ export default function SettingsPage() {
   const queryClient = useQueryClient();
   const { theme, setTheme } = useTheme();
   const { logout: logoutStore } = useAuthStore();
+  const {
+    error: profileError,
+    details: profileErrorDetails,
+    setError: setProfileError,
+    reset: resetProfileError,
+  } = useApiError();
   const [activeTab, setActiveTab] = useState<"profile" | "account" | "appearance">("profile");
 
   const { data: user, isLoading: userLoading } = useQuery({
@@ -62,8 +69,8 @@ export default function SettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["me"] });
       setMessage({ type: "success", text: "Profile updated successfully." });
     },
-    onError: (err: Error) => {
-      setMessage({ type: "error", text: err.message || "Failed to update profile." });
+    onError: (err: unknown) => {
+      setProfileError(err);
     },
   });
 
@@ -73,8 +80,8 @@ export default function SettingsPage() {
       setPasswordForm({ current_password: "", new_password: "", confirm_password: "" });
       setMessage({ type: "success", text: "Password changed successfully." });
     },
-    onError: (err: Error) => {
-      setMessage({ type: "error", text: err.message || "Failed to change password." });
+    onError: (err: unknown) => {
+      setProfileError(err);
     },
   });
 
@@ -85,13 +92,14 @@ export default function SettingsPage() {
       logoutStore();
       router.push("/");
     },
-    onError: (err: Error) => {
-      setMessage({ type: "error", text: err.message || "Failed to delete account." });
+    onError: (err: unknown) => {
+      setProfileError(err);
     },
   });
 
   const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    resetProfileError();
     updateProfileMutation.mutate({
       full_name: profileForm.full_name,
       daily_goal_minutes: Number(profileForm.daily_goal_minutes),
@@ -100,6 +108,7 @@ export default function SettingsPage() {
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    resetProfileError();
     if (passwordForm.new_password !== passwordForm.confirm_password) {
       setMessage({ type: "error", text: "New passwords do not match." });
       return;
@@ -138,6 +147,12 @@ export default function SettingsPage() {
             Dismiss
           </button>
         </div>
+      )}
+
+      {profileError && (
+        <ErrorMessage details={profileErrorDetails} className="mb-6">
+          {profileError}
+        </ErrorMessage>
       )}
 
       <div className="grid grid-cols-1 gap-8 md:grid-cols-4">

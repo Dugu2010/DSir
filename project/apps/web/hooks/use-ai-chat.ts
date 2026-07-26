@@ -4,7 +4,7 @@ import { apiClient } from "@/lib/axios";
 
 export type Message = { role: "user" | "assistant"; content: string };
 
-export function useAIChat() {
+export function useAIChat(context?: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isChatting, setIsChatting] = useState(false);
 
@@ -27,6 +27,7 @@ export function useAIChat() {
         },
         body: JSON.stringify({
           messages: [...messages, userMsg],
+          context,
           temperature: 0.7,
           max_tokens: 1024,
         }),

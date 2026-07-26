@@ -82,7 +82,6 @@ export default function LearnPage() {
   const [activeTab, setActiveTab] = useState<"content" | "mentor" | "notes">("content");
   const [desktopRightTab, setDesktopRightTab] = useState<"mentor" | "notes">("mentor");
   const [isFocusMode, setIsFocusMode] = useState(false);
-  const { messages, isChatting, sendMessage } = useAIChat();
   const [chatInput, setChatInput] = useState("");
 
   const {
@@ -148,6 +147,12 @@ export default function LearnPage() {
   const currentModule = courseDetail?.modules.find((m) =>
     m.lessons.some((l) => l.id === lessonId)
   );
+
+  const aiContext = useMemo(() => {
+    if (!courseDetail || !lessonDetail) return undefined;
+    return `Course: ${courseDetail.course.title}. Module: ${currentModule?.title ?? ""}. Lesson: ${lessonDetail.title}.`;
+  }, [courseDetail, currentModule, lessonDetail]);
+  const { messages, isChatting, sendMessage } = useAIChat(aiContext);
 
   useEffect(() => {
     if (lessonId) {

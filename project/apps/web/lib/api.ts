@@ -474,12 +474,51 @@ export async function deleteNote(noteId: string) {
 }
 
 // AI
-export async function sendChatMessage(messages: { role: "user" | "assistant"; content: string }[]) {
-  const res = await apiClient.post("/ai/chat", { messages });
+export async function sendChatMessage(
+  messages: { role: "user" | "assistant"; content: string }[],
+  context?: string
+) {
+  const res = await apiClient.post("/ai/chat", { messages, context });
   return res.data as { content: string };
 }
 
 export async function reviewCode(data: { language: string; code: string; context?: string }) {
   const res = await apiClient.post("/ai/code-review", data);
   return res.data as { feedback: string };
+}
+
+export async function generateHint(data: { concept: string; problem: string }) {
+  const res = await apiClient.post("/ai/hints", data);
+  return res.data as { hint: string };
+}
+
+export interface GeneratedRoadmap {
+  title: string;
+  description: string;
+  stages: string[];
+  content: string;
+}
+
+export async function generateRoadmap(data: {
+  goal: string;
+  experience?: string;
+  technologies?: string[];
+}) {
+  const res = await apiClient.post<GeneratedRoadmap>("/ai/roadmap/generate", data);
+  return res.data;
+}
+
+export interface InterviewQuestion {
+  question: string;
+  hints: string[];
+  follow_ups: string[];
+}
+
+export async function generateInterviewQuestion(data: {
+  role: string;
+  level?: string;
+  topic?: string;
+}) {
+  const res = await apiClient.post<InterviewQuestion>("/ai/interview", data);
+  return res.data;
 }

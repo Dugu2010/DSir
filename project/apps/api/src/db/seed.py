@@ -422,8 +422,8 @@ _PROJECT_DEFINITIONS: list[dict[str, Any]] = [
             "nice_to_have": ["Difficulty levels", "Timed rounds", "Colorful output"],
         },
         "starter_files": {
-            "main.py": "# TODO: implement quiz game\n",
-            "questions.json": '{"questions": []}\n',
+            "main.py": "import json\nimport random\n\ndef load_questions():\n    with open('questions.json') as f:\n        return json.load(f)['questions']\n\ndef run_quiz():\n    questions = load_questions()\n    random.shuffle(questions)\n    score = 0\n    for q in questions[:5]:\n        print(q['question'])\n        for i, opt in enumerate(q['options']):\n            print(f\"{i + 1}. {opt}\")\n        answer = input('Your answer: ')\n        if answer.strip().lower() == q['answer'].lower():\n            score += 1\n    print(f\"You scored {score}/5\")\n\nif __name__ == '__main__':\n    run_quiz()\n",
+            "questions.json": '{"questions": [{"question": "What is the output of print(2 + 3 * 4)?", "options": ["20", "14", "11", "24"], "answer": "14"}]}',
         },
     },
     {
@@ -442,8 +442,8 @@ _PROJECT_DEFINITIONS: list[dict[str, Any]] = [
             "nice_to_have": ["Charts", "Filtering", "Export to JSON"],
         },
         "starter_files": {
-            "main.py": "# TODO: implement CSV analyzer\n",
-            "data.csv": "name,score\nAlice,85\nBob,92\n",
+            "main.py": "import csv\nfrom collections import defaultdict\n\ndef analyze_csv(filename):\n    scores = []\n    with open(filename, newline='') as f:\n        reader = csv.DictReader(f)\n        for row in reader:\n            scores.append(int(row['score']))\n    return {\n        'count': len(scores),\n        'average': sum(scores) / len(scores),\n        'max': max(scores),\n        'min': min(scores),\n    }\n\nif __name__ == '__main__':\n    stats = analyze_csv('data.csv')\n    for key, value in stats.items():\n        print(f\"{key}: {value}\")\n",
+            "data.csv": "name,score\nAlice,85\nBob,92\nCharlie,78\nDiana,95\n",
         },
     },
     {
@@ -462,8 +462,8 @@ _PROJECT_DEFINITIONS: list[dict[str, Any]] = [
             "nice_to_have": ["Animations", "Dark mode", "Accessibility improvements"],
         },
         "starter_files": {
-            "index.html": "<!DOCTYPE html>\n<html>...</html>\n",
-            "styles.css": "/* TODO: styles */\n",
+            "index.html": "<!DOCTYPE html>\n<html lang=\\\"en\\\">\n<head>\n  <meta charset=\\\"UTF-8\">\n  <meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1.0\">\n  <title>DSir Product</title>\n  <link rel=\\\"stylesheet\\\" href=\\\"styles.css\">\n</head>\n<body>\n  <header>\n    <h1>DSir Product</h1>\n    <p>The best way to learn programming.</p>\n  </header>\n  <main>\n    <section>\n      <h2>Features</h2>\n      <ul>\n        <li>Interactive lessons</li>\n        <li>AI mentor</li>\n      </ul>\n    </section>\n    <section>\n      <h2>Contact</h2>\n      <form>\n        <label for=\\\"email\\\">Email:</label>\n        <input type=\\\"email\\\" id=\\\"email\\\" required>\n        <button type=\\\"submit\\\">Join</button>\n      </form>\n    </section>\n  </main>\n</body>\n</html>\n",
+            "styles.css": ":root {\n  --primary: #6366f1;\n  --text: #0f172a;\n  --bg: #f8fafc;\n}\n\n* {\n  box-sizing: border-box;\n  margin: 0;\n  padding: 0;\n}\n\nbody {\n  font-family: system-ui, -apple-system, sans-serif;\n  background: var(--bg);\n  color: var(--text);\n  line-height: 1.6;\n}\n\nheader {\n  text-align: center;\n  padding: 4rem 1rem;\n  background: var(--primary);\n  color: white;\n}\n\nmain {\n  max-width: 800px;\n  margin: 0 auto;\n  padding: 2rem 1rem;\n}\n\nsection {\n  margin-bottom: 2rem;\n}\n\nform {\n  display: flex;\n  flex-direction: column;\n  gap: 0.5rem;\n  max-width: 400px;\n}\n\nbutton {\n  padding: 0.5rem 1rem;\n  background: var(--primary);\n  color: white;\n  border: none;\n  border-radius: 0.375rem;\n  cursor: pointer;\n}\n",
         },
     },
     {
@@ -482,8 +482,9 @@ _PROJECT_DEFINITIONS: list[dict[str, Any]] = [
             "nice_to_have": ["Filters", "Animations", "Drag and drop"],
         },
         "starter_files": {
-            "index.html": "<!DOCTYPE html>\n<html>...</html>\n",
-            "app.js": "// TODO: implement todo app\n",
+            "index.html": "<!DOCTYPE html>\n<html lang=\\\"en\\\">\n<head>\n  <meta charset=\\\"UTF-8\">\n  <meta name=\\\"viewport\\\" content=\\\"width=device-width, initial-scale=1.0\">\n  <title>DSir To-Do</title>\n  <link rel=\\\"stylesheet\\\" href=\\\"styles.css\">\n</head>\n<body>\n  <div class=\\\"app\\\">\n    <h1>To-Do List</h1>\n    <form id=\\\"todo-form\\\">\n      <input type=\\\"text\\\" id=\\\"todo-input\\\" placeholder=\\\"Add a task\\\" required>\n      <button type=\\\"submit\\\">Add</button>\n    </form>\n    <ul id=\\\"todo-list\\\"></ul>\n  </div>\n  <script src=\\\"app.js\\\"></script>\n</body>\n</html>\n",
+            "app.js": "const form = document.getElementById('todo-form');\nconst input = document.getElementById('todo-input');\nconst list = document.getElementById('todo-list');\n\nlet todos = JSON.parse(localStorage.getItem('todos') || '[]');\n\nfunction render() {\n  list.innerHTML = '';\n  todos.forEach((todo, index) => {\n    const li = document.createElement('li');\n    li.textContent = todo;\n    const remove = document.createElement('button');\n    remove.textContent = 'Remove';\n    remove.addEventListener('click', () => {\n      todos.splice(index, 1);\n      save();\n    });\n    li.appendChild(remove);\n    list.appendChild(li);\n  });\n}\n\nfunction save() {\n  localStorage.setItem('todos', JSON.stringify(todos));\n  render();\n}\n\nform.addEventListener('submit', (e) => {\n  e.preventDefault();\n  todos.push(input.value);\n  input.value = '';\n  save();\n});\n\nrender();\n",
+            "styles.css": "body {\n  font-family: system-ui, sans-serif;\n  background: #f8fafc;\n  color: #0f172a;\n  display: flex;\n  justify-content: center;\n  padding: 2rem;\n}\n\n.app {\n  background: white;\n  padding: 2rem;\n  border-radius: 0.5rem;\n  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);\n  width: 100%;\n  max-width: 400px;\n}\n\nform {\n  display: flex;\n  gap: 0.5rem;\n  margin: 1rem 0;\n}\n\ninput {\n  flex: 1;\n  padding: 0.5rem;\n}\n\nbutton {\n  padding: 0.5rem 1rem;\n  background: #6366f1;\n  color: white;\n  border: none;\n  border-radius: 0.25rem;\n  cursor: pointer;\n}\n\nli {\n  display: flex;\n  justify-content: space-between;\n  padding: 0.5rem 0;\n  border-bottom: 1px solid #e2e8f0;\n}\n",
         },
     },
 ]

@@ -13,15 +13,16 @@ class PromptTemplate:
         return self.template.format(**kwargs)
 
 
-MENTOR_PROMPT = PromptTemplate(
-    name="mentor",
-    template="""You are a supportive programming mentor. A learner is asking about {concept}.
+MENTOR_SYSTEM_PROMPT = PromptTemplate(
+    name="mentor-system",
+    template="""You are DSir, a supportive programming mentor. The learner is currently working through: {context}.
 
-Context: {context}
-
-Learner question: {question}
-
-Provide a helpful, encouraging explanation that guides the learner.""",
+Rules:
+- Explain concepts clearly and concisely.
+- Provide code examples when helpful.
+- Do not give full solutions to exercises; guide the learner to discover the answer.
+- Encourage best practices and debugging strategies.
+- Keep responses focused on the current lesson context unless the learner asks something unrelated.""",
 )
 
 CODE_REVIEW_PROMPT = PromptTemplate(
@@ -59,12 +60,48 @@ REVISION_PROBLEM_PROMPT = PromptTemplate(
 )
 
 
+ROADMAP_GENERATOR_PROMPT = PromptTemplate(
+    name="roadmap-generator",
+    template="""Create a personalized learning roadmap.
+
+Goal: {goal}
+Experience level: {experience}
+Relevant technologies: {technologies}
+
+Return:
+- A short title on the first line.
+- A one-sentence description on the second line.
+- 5-8 stages/milestones, each starting with "- ".""",
+)
+
+INTERVIEW_COACH_PROMPT = PromptTemplate(
+    name="interview-coach",
+    template="""You are an interview coach preparing someone for a {level} {role} interview.
+
+Topic focus: {topic}
+
+Generate one realistic interview question.
+Provide 2-3 concise hints for the candidate.
+Also provide 2 follow-up questions an interviewer might ask.
+
+Format:
+Question: <question>
+Hint: <hint 1>
+Hint: <hint 2>
+Follow-up: <follow-up 1>
+Follow-up: <follow-up 2>""",
+)
+
+
 class PromptManager:
     _templates: dict[str, PromptTemplate] = {
-        "mentor": MENTOR_PROMPT,
+        "mentor": MENTOR_SYSTEM_PROMPT,
+        "mentor-system": MENTOR_SYSTEM_PROMPT,
         "code-review": CODE_REVIEW_PROMPT,
         "hint": HINT_PROMPT,
         "revision-problem": REVISION_PROBLEM_PROMPT,
+        "roadmap-generator": ROADMAP_GENERATOR_PROMPT,
+        "interview-coach": INTERVIEW_COACH_PROMPT,
     }
 
     @classmethod
