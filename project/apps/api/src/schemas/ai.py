@@ -81,6 +81,9 @@ class ImportContentRequest(BaseModel):
     category: str = "Backend"
     difficulty: str = "beginner"
     instructor: str = "DSir Learning Team"
+    provider: str | None = None
+    api_key: str | None = None
+    api_url: str | None = None
 
 
 class ImportContentResponse(BaseModel):

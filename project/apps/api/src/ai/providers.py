@@ -262,3 +262,71 @@ class OllamaProvider(AIProvider):
             response.raise_for_status()
             data = response.json()
         return list(data.get("embedding", []))
+
+
+class CustomProvider(AIProvider):
+    """Provider for custom AI APIs that accept a message and stream SSE responses.
+
+    Compatible with APIs like shulker.in that use:
+    POST {base_url}/?token={api_key}
+      with form data: message=<text>
+      and stream SSE responses with "data: " prefix containing JSON with "token" field.
+    """
+
+    def __init__(self, api_key: str, base_url: str | None = None):
+        self.api_key = api_key
+        default_url = os.getenv("CUSTOM_AI_BASE_URL", "https://shulker.in/api/colide_api_gateway-v1.0/")
+        self.base_url = (base_url or default_url).rstrip("/") + "/"
+
+    async def _request(
+        self,
+        prompt: str,
+        stream: bool = False,
+    ) -> AsyncGenerator[str, None]:
+        import httpx
+
+        params = {"token": self.api_key}
+        data = {"message": prompt}
+
+        async with (
+            httpx.AsyncClient() as client,
+            client.stream("POST", self.base_url, params=params, data=data) as response,
+        ):
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line:
+                    continue
+                if line.startswith("data: "):
+                    try:
+                        ev = json.loads(line[6:])
+                        token = ev.get("token", ev.get("content", ""))
+                        if token:
+                            yield token
+                    except json.JSONDecodeError:
+                        continue
+
+    async def generate(
+        self,
+        messages: list[Message],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> AIResponse:
+        prompt = "\n".join(f"{m.role.value}: {m.content}" for m in messages)
+        content_parts: list[str] = []
+        async for token in self._request(prompt, stream=True):
+            content_parts.append(token)
+        return AIResponse(content="".join(content_parts), model="custom")
+
+    async def generate_stream(
+        self,
+        messages: list[Message],
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+    ) -> AsyncGenerator[str, None]:
+        prompt = "\n".join(f"{m.role.value}: {m.content}" for m in messages)
+        async for token in self._request(prompt, stream=True):
+            yield token
+
+    async def embed(self, text: str, dimensions: int = 1536) -> list[float]:
+        raise NotImplementedError("Custom AI provider does not support embeddings")
+

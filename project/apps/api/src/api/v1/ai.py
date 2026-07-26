@@ -10,9 +10,10 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.ai.manager import get_ai_manager
+from src.ai.manager import AIManager, get_ai_manager
 from src.ai.prompts import PromptManager
 from src.ai.protocols import Message, Role
+from src.ai.providers import CustomProvider
 from src.core.dependencies import get_current_active_user, require_content_creator
 from src.core.rate_limit import RateLimiter
 from src.db.session import get_db
@@ -113,8 +114,7 @@ async def import_content(
     if not data.source_text.strip():
         raise HTTPException(status_code=400, detail="Source text is required")
 
-    manager = get_ai_manager()
-
+    # Build the system and user messages
     messages = [
         Message(
             role=Role.SYSTEM,
@@ -131,6 +131,15 @@ async def import_content(
             ),
         ),
     ]
+
+    # Generate AI response — use CustomProvider directly when user provides API key
+    if data.provider == "custom" and data.api_key:
+        provider = CustomProvider(api_key=data.api_key, base_url=data.api_url)
+        manager = AIManager(provider)
+    elif data.provider:
+        manager = get_ai_manager(data.provider)
+    else:
+        manager = get_ai_manager()
 
     response = await manager.generate(messages, temperature=0.4, max_tokens=8000)
 

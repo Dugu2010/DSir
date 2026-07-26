@@ -9,6 +9,7 @@ from typing import Any, ParamSpec, TypeVar
 from src.ai.protocols import AIProvider, AIResponse, Message
 from src.ai.providers import (
     AnthropicProvider,
+    CustomProvider,
     GeminiProvider,
     MockProvider,
     OllamaProvider,
@@ -109,4 +110,6 @@ def _build_provider(name: str) -> AIProvider:
         return GeminiProvider(api_key=os.getenv("GEMINI_API_KEY"))
     if name == "ollama":
         return OllamaProvider(base_url=os.getenv("OLLAMA_BASE_URL"))
+    if name == "custom":
+        return CustomProvider(api_key=os.getenv("CUSTOM_API_KEY", ""))
     return MockProvider()

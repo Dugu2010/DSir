@@ -522,3 +522,27 @@ export async function generateInterviewQuestion(data: {
   const res = await apiClient.post<InterviewQuestion>("/ai/interview", data);
   return res.data;
 }
+
+export interface ImportContentResponse {
+  course_id: string;
+  course_title: string;
+  modules_created: number;
+  lessons_created: number;
+  message: string;
+}
+
+export async function importContent(data: {
+  source_text: string;
+  course_title?: string;
+  programming_language?: string;
+  technology?: string;
+  category?: string;
+  difficulty?: string;
+  instructor?: string;
+  provider?: string;
+  api_key?: string;
+  api_url?: string;
+}) {
+  const res = await apiClient.post<ImportContentResponse>("/ai/import-content", data);
+  return res.data;
+}

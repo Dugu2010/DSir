@@ -1,4 +1,5 @@
 import {
+  FileInput,
   FolderCode,
   LayoutDashboard,
   Library,
@@ -13,6 +14,7 @@ import {
 export const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Courses", href: "/courses", icon: Library },
+  { name: "Import Course", href: "/import-course", icon: FileInput },
   { name: "Roadmaps", href: "/roadmaps", icon: Map },
   { name: "AI Roadmap", href: "/roadmaps/generate", icon: Sparkles },
   { name: "Interview", href: "/interview", icon: Mic },
