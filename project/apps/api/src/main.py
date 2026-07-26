@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from src.api.v1.router import api_router
 from src.core.config import parse_cors_origins, settings
@@ -38,13 +39,35 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+logger = logging.getLogger("dsir.api")
+
+
+class CORSLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
+        response = await call_next(request)
+        if request.method == "OPTIONS" and response.status_code >= 400:
+            logger.warning(
+                "CORS preflight failed: method=%s path=%s origin=%s allow=%s status=%s",
+                request.method,
+                request.url.path,
+                request.headers.get("origin"),
+                response.headers.get("access-control-allow-origin"),
+                response.status_code,
+            )
+        return response
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=parse_cors_origins(settings.CORS_ORIGINS),
+    allow_origin_regex=r"https://.*\.vercel\.app$",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Added after CORSMiddleware so it wraps around it and can log preflight failures.
+app.add_middleware(CORSLoggingMiddleware)
 
 
 @app.middleware("http")
@@ -63,7 +86,6 @@ async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse
     return JSONResponse(status_code=400, content={"detail": str(exc)})
 
 
-logger = logging.getLogger("dsir.api")
 
 
 @app.exception_handler(HTTPException)
