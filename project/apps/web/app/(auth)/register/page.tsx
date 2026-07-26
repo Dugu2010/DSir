@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { register as registerUser, fetchMe } from "@/lib/axios";
+import { useApiError } from "@/hooks/use-api-error";
 import { useAuthStore } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +28,7 @@ type RegisterForm = z.infer<typeof registerSchema>;
 export default function RegisterPage() {
   const router = useRouter();
   const { login } = useAuthStore();
-  const [error, setError] = useState<string | null>(null);
+  const { error, details: errorDetails, setError: setApiError, reset: resetApiError } = useApiError();
 
   const {
     register,
@@ -40,13 +40,13 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: RegisterForm) => {
     try {
-      setError(null);
+      resetApiError();
       await registerUser(data.email, data.password, data.fullName);
       const user = await fetchMe();
       login(user);
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Registration failed");
+      setApiError(err);
     }
   };
 
@@ -58,7 +58,7 @@ export default function RegisterPage() {
       </p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && <ErrorMessage details={errorDetails}>{error}</ErrorMessage>}
 
         <div>
           <Label htmlFor="email">Email</Label>

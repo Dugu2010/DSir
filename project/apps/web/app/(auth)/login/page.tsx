@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { login, fetchMe } from "@/lib/axios";
+import { useApiError } from "@/hooks/use-api-error";
 import { useAuthStore } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,17 +32,17 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
   });
 
-  const [error, setError] = useState<string | null>(null);
+  const { error, details: errorDetails, setError: setApiError, reset: resetApiError } = useApiError();
 
   const onSubmit = async (data: LoginForm) => {
     try {
-      setError(null);
+      resetApiError();
       await login(data.email, data.password);
       const user = await fetchMe();
       loginStore(user);
       router.push("/dashboard");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Login failed");
+      setApiError(err);
     }
   };
 
@@ -54,7 +54,7 @@ export default function LoginPage() {
       </p>
 
       <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && <ErrorMessage details={errorDetails}>{error}</ErrorMessage>}
 
         <div>
           <Label htmlFor="email">Email</Label>

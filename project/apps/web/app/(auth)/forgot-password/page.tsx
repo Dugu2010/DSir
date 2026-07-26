@@ -6,6 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { apiClient } from "@/lib/axios";
+import { useApiError } from "@/hooks/use-api-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +20,7 @@ type ForgotPasswordForm = z.infer<typeof forgotPasswordSchema>;
 
 export default function ForgotPasswordPage() {
   const [submitted, setSubmitted] = useState(false);
+  const { error, details: errorDetails, setError: setApiError, reset: resetApiError } = useApiError();
 
   const {
     register,
@@ -31,11 +33,12 @@ export default function ForgotPasswordPage() {
   const onSubmit = async (data: ForgotPasswordForm) => {
     // Submit a password reset request to the backend.
     // If no email is found, we still show success to avoid revealing user existence.
+    resetApiError();
     try {
       await apiClient.post("/auth/forgot-password", { email: data.email });
-    } catch {
-      // Backend may not expose this endpoint yet.
-      // Gracefully show the confirmation state regardless.
+    } catch (err) {
+      setApiError(err);
+      return;
     }
     setSubmitted(true);
   };
@@ -53,6 +56,7 @@ export default function ForgotPasswordPage() {
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4">
+          {error && <ErrorMessage details={errorDetails}>{error}</ErrorMessage>}
           <div>
             <Label htmlFor="email">Email</Label>
             <Input id="email" type="email" {...register("email")} className="mt-1" />
