@@ -67,3 +67,25 @@ class HintRequest(BaseModel):
 
 class HintResponse(BaseModel):
     hint: str
+
+
+class ImportContentRequest(BaseModel):
+    """Request to import course content from a source text (e.g. PDF, book chapter, article).
+
+    The AI will enhance, restructure, and expand the content into a full course.
+    """
+    source_text: str
+    course_title: str | None = None
+    programming_language: str = "Python"
+    technology: str = "Python"
+    category: str = "Backend"
+    difficulty: str = "beginner"
+    instructor: str = "DSir Learning Team"
+
+
+class ImportContentResponse(BaseModel):
+    course_id: str
+    course_title: str
+    modules_created: int
+    lessons_created: int
+    message: str
