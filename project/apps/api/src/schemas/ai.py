@@ -70,17 +70,8 @@ class HintResponse(BaseModel):
 
 
 class ImportContentRequest(BaseModel):
-    """Request to import course content from a source text (e.g. PDF, book chapter, article).
-
-    The AI will enhance, restructure, and expand the content into a full course.
-    """
+    """Request to preview/approve course import. AI decides title, language, category, and per-module difficulty."""
     source_text: str
-    course_title: str | None = None
-    programming_language: str = "Python"
-    technology: str = "Python"
-    category: str = "Backend"
-    difficulty: str = "beginner"
-    instructor: str = "DSir Learning Team"
     provider: str | None = None
     api_key: str | None = None
     api_url: str | None = None
@@ -92,3 +83,49 @@ class ImportContentResponse(BaseModel):
     modules_created: int
     lessons_created: int
     message: str
+
+
+class LessonProposal(BaseModel):
+    title: str
+    body: str
+    code_language: str
+    code_example: str
+    quiz: dict[str, str | list[str]]
+    best_practices: list[str]
+    common_mistakes: list[str]
+    try_it: str
+
+
+class ModuleProposal(BaseModel):
+    title: str
+    description: str
+    difficulty: str  # AI decides per-module: beginner, intermediate, advanced
+    lessons: list[LessonProposal]
+
+
+class ImportPreviewResponse(BaseModel):
+    """AI-generated course proposal before saving. User reviews and approves."""
+    title: str
+    description: str
+    programming_language: str
+    technology: str
+    category: str
+    skills: list[str]
+    learning_objectives: list[str]
+    modules: list[ModuleProposal]
+
+
+class ImportApproveRequest(BaseModel):
+    """User-approved proposal to create the course in DB.
+
+    The user can edit any field before approving. Exactly the same shape as ImportPreviewResponse.
+    """
+    title: str
+    description: str
+    programming_language: str
+    technology: str
+    category: str
+    instructor: str = "DSir Learning Team"
+    skills: list[str]
+    learning_objectives: list[str]
+    modules: list[ModuleProposal]

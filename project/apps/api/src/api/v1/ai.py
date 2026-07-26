@@ -26,10 +26,14 @@ from src.schemas.ai import (
     CodeReviewResponse,
     HintRequest,
     HintResponse,
+    ImportApproveRequest,
     ImportContentRequest,
     ImportContentResponse,
+    ImportPreviewResponse,
     InterviewCoachRequest,
     InterviewCoachResponse,
+    LessonProposal,
+    ModuleProposal,
     RoadmapGenerateRequest,
     RoadmapGenerateResponse,
 )
@@ -53,168 +57,191 @@ def _to_slug(text: str) -> str:
     return text.lower().replace(" ", "-").replace(".", "").replace("&", "and")[:50]
 
 
-_COURSE_IMPORT_SYSTEM_PROMPT = (
+_COURSE_PREVIEW_SYSTEM_PROMPT = (
     "You are an expert curriculum designer. Given source text from a programming book or article, "
-    "transform it into a structured course.\n\n"
-    "Your task:\n"
-    "1. Analyze the source text thoroughly\n"
-    "2. Create 4-8 modules (concepts) that cover the content from beginner to advanced\n"
-    "3. Each module should have 2-4 lessons with real, working code examples\n"
-    "4. Each lesson must include:\n"
-    "   - A clear explanation body\n"
-    "   - Code example(s) in the specified language\n"
-    "   - A quiz question with options and the correct answer\n"
-    "   - Best practices\n"
-    "   - Common mistakes\n"
-    '   - A "try it yourself" exercise that builds a small real-world project piece\n'  # noqa: E501
-    "\n"
+    "transform it into a structured course.\\n\\n"
+    "Your task:\\n"
+    "1. Analyze the source text thoroughly\\n"
+    "2. Decide the course title, programming language, technology, and category based on the content\\n"
+    "3. Create 4-8 modules (concepts) that cover the content, assigning EACH module its appropriate difficulty "
+    "(beginner, intermediate, or advanced) based on how complex the content in that module is\\n"
+    "4. Each module should have 2-4 lessons with real, working code examples\\n"
+    "5. Each lesson must include:\\n"
+    "   - A clear explanation body\\n"
+    "   - Code example(s) in the specified language\\n"
+    "   - A quiz question with options and the correct answer\\n"
+    "   - Best practices\\n"
+    "   - Common mistakes\\n"
+    '   - A "try it yourself" exercise that builds a small real-world project piece\\n'
+    "\\n"
     "IMPORTANT: Modernize and improve the content. If the source is outdated, update concepts, "
     "syntax, and examples to current best practices. Simplify explanations for beginners. "
-    "Add new relevant topics that are missing.\n\n"
+    "Add new relevant topics that are missing.\\n\\n"
     "Respond ONLY with valid JSON. No markdown, no code fences. "
-    'Use this exact structure:\n'
-    '{\n'
-    '  "title": "Course Title",\n'
-    '  "description": "Course description",\n'
-    '  "skills": ["Skill 1", "Skill 2"],\n'
-    '  "learning_objectives": ["Objective 1", "Objective 2"],\n'
-    '  "modules": [\n'
-    '    {\n'
-    '      "title": "Module/Concept Title",\n'
-    '      "lessons": [\n'
-    '        {\n'
-    '          "title": "Lesson Title",\n'
-    '          "body": "Markdown explanation text...",\n'
-    '          "code_language": "python",\n'
-    '          "code_example": "code here...",\n'
-    '          "quiz": {\n'
-    '            "question": "Quiz question?",\n'
-    '            "options": ["Option A", "Option B", "Option C"],\n'
-    '            "answer": "Correct option text"\n'
-    '          },\n'
-    '          "best_practices": ["Practice 1", "Practice 2"],\n'
-    '          "common_mistakes": ["Mistake 1", "Mistake 2"],\n'
-    '          "try_it": "Exercise description"\n'
-    '        }\n'
-    '      ]\n'
-    '    }\n'
-    '  ]\n'
-    '}'  # noqa: E501
+    'Use this exact structure:\\n'
+    '{\\n'
+    '  "title": "Course Title",\\n'
+    '  "description": "Course description",\\n'
+    '  "programming_language": "Python",\\n'
+    '  "technology": "Python",\\n'
+    '  "category": "Backend",\\n'
+    '  "skills": ["Skill 1", "Skill 2"],\\n'
+    '  "learning_objectives": ["Objective 1", "Objective 2"],\\n'
+    '  "modules": [\\n'
+    '    {\\n'
+    '      "title": "Module/Concept Title",\\n'
+    '      "description": "Module description",\\n'
+    '      "difficulty": "beginner|intermediate|advanced",\\n'
+    '      "lessons": [\\n'
+    '        {\\n'
+    '          "title": "Lesson Title",\\n'
+    '          "body": "Markdown explanation text...",\\n'
+    '          "code_language": "python",\\n'
+    '          "code_example": "code here...",\\n'
+    '          "quiz": {\\n'
+    '            "question": "Quiz question?",\\n'
+    '            "options": ["Option A", "Option B", "Option C"],\\n'
+    '            "answer": "Correct option text"\\n'
+    '          },\\n'
+    '          "best_practices": ["Practice 1", "Practice 2"],\\n'
+    '          "common_mistakes": ["Mistake 1", "Mistake 2"],\\n'
+    '          "try_it": "Exercise description"\\n'
+    '        }\\n'
+    '      ]\\n'
+    '    }\\n'
+    '  ]\\n'
+    '}'
 )
 
 
-async def _run_import(data: ImportContentRequest, db: AsyncSession) -> ImportContentResponse:
-    """Shared logic: call AI with source text, parse response, create course in DB."""
+def _parse_modules_from_ai_response(parsed: dict[str, Any]) -> list[ModuleProposal]:
+    """Parse the AI response JSON into a list of ModuleProposal objects."""
+    modules: list[ModuleProposal] = []
+    for m in parsed.get("modules", []):
+        lessons_raw = m.get("lessons", [])
+        lessons: list[LessonProposal] = []
+        for lsn in lessons_raw:
+            lessons.append(LessonProposal(
+                title=lsn.get("title", ""),
+                body=lsn.get("body", ""),
+                code_language=lsn.get("code_language", "text"),
+                code_example=lsn.get("code_example", ""),
+                quiz=lsn.get("quiz", {}),
+                best_practices=lsn.get("best_practices", []),
+                common_mistakes=lsn.get("common_mistakes", []),
+                try_it=lsn.get("try_it", ""),
+            ))
+        modules.append(ModuleProposal(
+            title=m.get("title", ""),
+            description=m.get("description", ""),
+            difficulty=m.get("difficulty", "intermediate"),
+            lessons=lessons,
+        ))
+    return modules
+
+
+async def _get_ai_response(
+    source_text: str,
+    provider: str | None,
+    api_key: str | None,
+    api_url: str | None,
+) -> dict[str, Any]:
+    """Call AI with source text, return parsed JSON proposal."""
     messages = [
-        Message(
-            role=Role.SYSTEM,
-            content=_COURSE_IMPORT_SYSTEM_PROMPT,
-        ),
+        Message(role=Role.SYSTEM, content=_COURSE_PREVIEW_SYSTEM_PROMPT),
         Message(
             role=Role.USER,
-            content=(
-                f"Course title: {data.course_title or 'Untitled Course'}\n"
-                f"Programming language: {data.programming_language}\n"
-                f"Category: {data.category}\n"
-                f"Difficulty: {data.difficulty}\n\n"
-                f"Source text to transform into a course:\n\n{data.source_text}"
-            ),
+            content=f"Source text to transform into a course:\\n\\n{source_text}",
         ),
     ]
 
-    # Generate AI response — use CustomProvider directly when user provides API key
-    if data.provider == "custom" and data.api_key:
-        provider = CustomProvider(api_key=data.api_key, base_url=data.api_url)
-        manager = AIManager(provider)
-    elif data.provider:
-        manager = get_ai_manager(data.provider)
+    if provider == "custom" and api_key:
+        prov = CustomProvider(api_key=api_key, base_url=api_url)
+        manager = AIManager(prov)
+    elif provider:
+        manager = get_ai_manager(provider)
     else:
         manager = get_ai_manager()
 
     response = await manager.generate(messages, temperature=0.4, max_tokens=8000)
 
     try:
-        parsed = _extract_json(response.content)
+        return _extract_json(response.content)
     except (json.JSONDecodeError, ValueError, IndexError):
         raise HTTPException(
             status_code=500,
             detail="AI returned invalid JSON. Try again or simplify the source text.",
         ) from None
 
-    course_title = parsed.get("title", data.course_title or "Imported Course")
+
+async def _create_course_from_proposal(
+    proposal: ImportPreviewResponse | ImportApproveRequest,
+    db: AsyncSession,
+) -> Course:
+    """Create Course, Concept, and Lesson records in DB from an approved proposal.
+    Does NOT commit — caller must commit."""
+    course_title = proposal.title
     course_slug = _to_slug(course_title)
 
     existing = await db.execute(select(Course).where(Course.slug == course_slug))
     if existing.scalar_one_or_none():
         course_slug = f"{course_slug}-{uuid.uuid4().hex[:6]}"
 
-    skills = parsed.get("skills", [])
+    # Collect skills from module titles if empty
+    skills = proposal.skills
     if not skills:
-        modules_raw = parsed.get("modules", [])
-        skills = [m.get("title", "") for m in modules_raw if isinstance(m, dict) and m.get("title")]
+        skills = [m.title for m in proposal.modules if m.title]
 
-    learning_objectives = parsed.get("learning_objectives", [])
-    if not learning_objectives:
-        modules_raw = parsed.get("modules", [])
-        learning_objectives = [
-            f"Understand {m.get('title', 'the concepts')}"
-            for m in modules_raw[:4]
-            if isinstance(m, dict)
-        ]
+    instructor = getattr(proposal, "instructor", "DSir Learning Team")
 
     course = Course(
         id=uuid.uuid4(),
         slug=course_slug,
         title=course_title,
-        description=parsed.get("description", ""),
-        category=data.category,
-        programming_language=data.programming_language,
-        technology=data.technology,
-        difficulty=data.difficulty,
-        instructor=data.instructor,
+        description=proposal.description,
+        category=proposal.category,
+        programming_language=proposal.programming_language,
+        technology=proposal.technology,
+        difficulty="mixed",
+        instructor=instructor,
         is_published=True,
         estimated_duration=0,
         skills=skills,
-        learning_objectives=learning_objectives,
+        learning_objectives=proposal.learning_objectives,
     )
     db.add(course)
     await db.flush()
 
     total_duration = 0
-    modules_created = 0
-    lessons_created = 0
-
-    for module_idx, module_data in enumerate(parsed.get("modules", []), start=1):
-        module_title = module_data.get("title", f"Module {module_idx}")
+    for module_idx, module_data in enumerate(proposal.modules, start=1):
         concept = Concept(
             id=uuid.uuid4(),
             course_id=course.id,
-            slug=_to_slug(module_title),
-            title=module_title,
-            description=module_data.get("description", f"{module_title} - learn through examples."),
+            slug=_to_slug(module_data.title),
+            title=module_data.title,
+            description=module_data.description or f"{module_data.title} - learn through examples.",
             order=module_idx,
+            difficulty=module_data.difficulty,
             prerequisites=[],
         )
         db.add(concept)
         await db.flush()
-        modules_created += 1
 
-        for lesson_idx, lesson_data in enumerate(module_data.get("lessons", []), start=1):
-            lesson_title = lesson_data.get("title", f"Lesson {lesson_idx}")
-            quiz_data = lesson_data.get("quiz", {})
+        for lesson_idx, lesson_data in enumerate(module_data.lessons, start=1):
+            quiz_data = lesson_data.quiz if isinstance(lesson_data.quiz, dict) else {}
             lesson = Lesson(
                 id=uuid.uuid4(),
                 concept_id=concept.id,
-                slug=f"{_to_slug(module_title)}-lesson-{lesson_idx}",
-                title=lesson_title,
+                slug=f"{_to_slug(module_data.title)}-lesson-{lesson_idx}",
+                title=lesson_data.title,
                 content={
-                    "body": lesson_data.get("body", ""),
-                    "code_language": lesson_data.get("code_language", data.programming_language.lower()),
-                    "code_example": lesson_data.get("code_example", ""),
+                    "body": lesson_data.body or "",
+                    "code_language": lesson_data.code_language or proposal.programming_language.lower(),
+                    "code_example": lesson_data.code_example or "",
                     "quiz": [quiz_data] if quiz_data else [],
-                    "best_practices": lesson_data.get("best_practices", []),
-                    "common_mistakes": lesson_data.get("common_mistakes", []),
-                    "try_it": lesson_data.get("try_it", ""),
+                    "best_practices": lesson_data.best_practices,
+                    "common_mistakes": lesson_data.common_mistakes,
+                    "try_it": lesson_data.try_it or "",
                 },
                 lesson_type="reading",
                 position=lesson_idx,
@@ -222,12 +249,52 @@ async def _run_import(data: ImportContentRequest, db: AsyncSession) -> ImportCon
             )
             db.add(lesson)
             total_duration += lesson.duration_minutes
-            lessons_created += 1
 
     course.estimated_duration = total_duration
+    return course
+
+
+@router.post("/import-preview", response_model=ImportPreviewResponse)
+async def import_preview(
+    data: ImportContentRequest,
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(require_content_creator),
+    _rate_limit: None = Depends(RateLimiter("5/minute")),
+) -> ImportPreviewResponse:
+    """Analyze source text and return an AI-generated course proposal without saving to DB.
+    User reviews the proposal and can edit before approving."""
+    if not data.source_text.strip():
+        raise HTTPException(status_code=400, detail="Source text is required")
+
+    parsed = await _get_ai_response(data.source_text, data.provider, data.api_key, data.api_url)
+    modules = _parse_modules_from_ai_response(parsed)
+
+    return ImportPreviewResponse(
+        title=parsed.get("title", "Untitled Course"),
+        description=parsed.get("description", ""),
+        programming_language=parsed.get("programming_language", "Python"),
+        technology=parsed.get("technology", "Python"),
+        category=parsed.get("category", "Backend"),
+        skills=parsed.get("skills", []),
+        learning_objectives=parsed.get("learning_objectives", []),
+        modules=modules,
+    )
+
+
+@router.post("/import-approve", response_model=ImportContentResponse)
+async def import_approve(
+    proposal: ImportApproveRequest,
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(require_content_creator),
+    _rate_limit: None = Depends(RateLimiter("10/minute")),
+) -> ImportContentResponse:
+    """Create a course in the database from an approved (possibly user-edited) proposal."""
+    course = await _create_course_from_proposal(proposal, db)
     await db.commit()
     await db.refresh(course)
 
+    modules_created = len(proposal.modules)
+    lessons_created = sum(len(m.lessons) for m in proposal.modules)
     return ImportContentResponse(
         course_id=str(course.id),
         course_title=course.title,
@@ -237,6 +304,9 @@ async def _run_import(data: ImportContentRequest, db: AsyncSession) -> ImportCon
     )
 
 
+# ── Legacy endpoints (kept for backward compatibility) ──────────────────────
+
+
 @router.post("/import-content", response_model=ImportContentResponse)
 async def import_content(
     data: ImportContentRequest,
@@ -244,37 +314,59 @@ async def import_content(
     _current_user: User = Depends(require_content_creator),
     _rate_limit: None = Depends(RateLimiter("5/minute")),
 ) -> ImportContentResponse:
-    """Import and transform content source text into a full course with modules and lessons."""
+    """[Legacy] Import content directly. Prefer preview+approve workflow."""
     if not data.source_text.strip():
         raise HTTPException(status_code=400, detail="Source text is required")
-    return await _run_import(data, db)
+
+    parsed = await _get_ai_response(data.source_text, data.provider, data.api_key, data.api_url)
+
+    modules = _parse_modules_from_ai_response(parsed)
+
+    proposal_data = ImportApproveRequest(
+        title=parsed.get("title", "Imported Course"),
+        description=parsed.get("description", ""),
+        programming_language=parsed.get("programming_language", "Python"),
+        technology=parsed.get("technology", "Python"),
+        category=parsed.get("category", "Backend"),
+        instructor="DSir Learning Team",
+        skills=parsed.get("skills", []),
+        learning_objectives=parsed.get("learning_objectives", []),
+        modules=modules,
+    )
+
+    course = await _create_course_from_proposal(proposal_data, db)
+    await db.commit()
+    await db.refresh(course)
+
+    modules_created = len(modules)
+    lessons_created = sum(len(m.lessons) for m in modules)
+    return ImportContentResponse(
+        course_id=str(course.id),
+        course_title=course.title,
+        modules_created=modules_created,
+        lessons_created=lessons_created,
+        message=f"Course '{course.title}' created with {modules_created} modules and {lessons_created} lessons.",
+    )
 
 
-@router.post("/import-pdf", response_model=ImportContentResponse)
+@router.post("/import-pdf", response_model=ImportPreviewResponse)
 async def import_pdf(
     file: UploadFile = File(...),
-    course_title: str | None = Form(None),
-    programming_language: str = Form("Python"),
-    technology: str = Form("Python"),
-    category: str = Form("Backend"),
-    difficulty: str = Form("beginner"),
     provider: str | None = Form(None),
     api_key: str | None = Form(None),
     api_url: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(require_content_creator),
     _rate_limit: None = Depends(RateLimiter("5/minute")),
-) -> ImportContentResponse:
-    """Upload a PDF file and import its content as a course."""
+) -> ImportPreviewResponse:
+    """Upload a PDF file and return an AI preview of the course structure (no DB save)."""
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
-    # Check file size (max 50 MB)
     content_bytes = await file.read()
     if len(content_bytes) > 50 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="PDF file exceeds the 50 MB size limit")
 
-    # Extract text from PDF using PyMuPDF
     try:
         import fitz
     except ImportError:
@@ -301,20 +393,22 @@ async def import_pdf(
     if not source_text:
         raise HTTPException(status_code=400, detail="No text could be extracted from the PDF")
 
-    # Build ImportContentRequest and delegate to the existing import logic
-    import_data = ImportContentRequest(
-        source_text=source_text,
-        course_title=course_title,
-        programming_language=programming_language,
-        technology=technology,
-        category=category,
-        difficulty=difficulty,
-        provider=provider,
-        api_key=api_key,
-        api_url=api_url,
+    parsed = await _get_ai_response(source_text, provider, api_key, api_url)
+    modules = _parse_modules_from_ai_response(parsed)
+
+    return ImportPreviewResponse(
+        title=parsed.get("title", "Untitled Course"),
+        description=parsed.get("description", ""),
+        programming_language=parsed.get("programming_language", "Python"),
+        technology=parsed.get("technology", "Python"),
+        category=parsed.get("category", "Backend"),
+        skills=parsed.get("skills", []),
+        learning_objectives=parsed.get("learning_objectives", []),
+        modules=modules,
     )
 
-    return await _run_import(import_data, db)
+
+# ── Chat / AI endpoints ────────────────────────────────────────────────────
 
 
 @router.post("/chat", response_model=ChatResponse)

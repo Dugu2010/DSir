@@ -531,14 +531,69 @@ export interface ImportContentResponse {
   message: string;
 }
 
+export interface LessonProposal {
+  title: string;
+  body: string;
+  code_language: string;
+  code_example: string;
+  quiz: Record<string, string | string[]>;
+  best_practices: string[];
+  common_mistakes: string[];
+  try_it: string;
+}
+
+export interface ModuleProposal {
+  title: string;
+  description: string;
+  difficulty: string;
+  lessons: LessonProposal[];
+}
+
+export interface ImportPreviewResponse {
+  title: string;
+  description: string;
+  programming_language: string;
+  technology: string;
+  category: string;
+  skills: string[];
+  learning_objectives: string[];
+  modules: ModuleProposal[];
+}
+
+export async function importPreview(data: {
+  source_text: string;
+  provider?: string;
+  api_key?: string;
+  api_url?: string;
+}) {
+  const res = await apiClient.post<ImportPreviewResponse>("/ai/import-preview", data);
+  return res.data;
+}
+
+export async function importPreviewPdf(data: {
+  file: File;
+  provider?: string;
+  api_key?: string;
+  api_url?: string;
+}) {
+  const formData = new FormData();
+  formData.append("file", data.file);
+  if (data.provider) formData.append("provider", data.provider);
+  if (data.api_key) formData.append("api_key", data.api_key);
+  if (data.api_url) formData.append("api_url", data.api_url);
+
+  const res = await apiClient.post<ImportPreviewResponse>("/ai/import-pdf", formData);
+  return res.data;
+}
+
+export async function importApprove(data: ImportPreviewResponse & { instructor?: string }) {
+  const res = await apiClient.post<ImportContentResponse>("/ai/import-approve", data);
+  return res.data;
+}
+
+// Legacy import endpoints (keep for backward compatibility)
 export async function importContent(data: {
   source_text: string;
-  course_title?: string;
-  programming_language?: string;
-  technology?: string;
-  category?: string;
-  difficulty?: string;
-  instructor?: string;
   provider?: string;
   api_key?: string;
   api_url?: string;
@@ -549,23 +604,12 @@ export async function importContent(data: {
 
 export async function importPdf(data: {
   file: File;
-  course_title?: string;
-  programming_language?: string;
-  technology?: string;
-  category?: string;
-  difficulty?: string;
-  instructor?: string;
   provider?: string;
   api_key?: string;
   api_url?: string;
 }) {
   const formData = new FormData();
   formData.append("file", data.file);
-  if (data.course_title) formData.append("course_title", data.course_title);
-  formData.append("programming_language", data.programming_language ?? "Python");
-  formData.append("technology", data.technology ?? "Python");
-  formData.append("category", data.category ?? "Backend");
-  formData.append("difficulty", data.difficulty ?? "beginner");
   if (data.provider) formData.append("provider", data.provider);
   if (data.api_key) formData.append("api_key", data.api_key);
   if (data.api_url) formData.append("api_url", data.api_url);
