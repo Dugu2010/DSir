@@ -128,28 +128,31 @@ export default function ImportCoursePage() {
 
   // ── Progress simulation ──────────────────────────────────────────────
   const [progressPhase, setProgressPhase] = useState(0);
+  const [progressPercent, setProgressPercent] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [phaseDescription, setPhaseDescription] = useState("");
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const PHASES = [
-    { label: "Uploading file", icon: Upload, duration: 8 },
-    { label: "Extracting text content", icon: FileSearch, duration: 20 },
-    { label: "Analyzing content structure", icon: Search, duration: 25 },
-    { label: "Structuring modules & lessons", icon: Workflow, duration: 30 },
-    { label: "Generating course metadata", icon: Sparkles, duration: 15 },
-    { label: "Finalizing", icon: FileType, duration: 10 },
+    { label: "Uploading file", icon: Upload },
+    { label: "Extracting text content", icon: FileSearch },
+    { label: "Analyzing content structure", icon: Search },
+    { label: "Structuring modules & lessons", icon: Workflow },
+    { label: "Generating course metadata", icon: Sparkles },
+    { label: "Finalizing", icon: FileType },
   ];
 
   useEffect(() => {
     if (previewMutation.isPending) {
       setProgressPhase(0);
+      setProgressPercent(0);
       setElapsedSeconds(0);
       setPhaseDescription(PHASES[0].label);
 
       timerRef.current = setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
+        setProgressPercent((prev) => Math.min(prev + 0.35, 95));
       }, 1000);
 
       progressIntervalRef.current = setInterval(() => {
@@ -158,7 +161,7 @@ export default function ImportCoursePage() {
           setPhaseDescription(PHASES[next].label);
           return next;
         });
-      }, 4000);
+      }, 5000);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
@@ -168,16 +171,6 @@ export default function ImportCoursePage() {
       if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
     };
   }, [previewMutation.isPending]);
-
-  const progressPercent = Math.min(
-    (PHASES.slice(0, progressPhase).reduce((s, p) => s + p.duration, 0) +
-      (progressPhase < PHASES.length
-        ? (elapsedSeconds % 12) * (PHASES[Math.min(progressPhase, PHASES.length - 1)]?.duration || 10) / 12
-        : 0)) /
-      PHASES.reduce((s, p) => s + p.duration, 0) *
-      100,
-    95
-  );
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
