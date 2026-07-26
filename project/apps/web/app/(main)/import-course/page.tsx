@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
 import Link from "next/link";
 import {
@@ -25,6 +25,11 @@ import {
   Trash2,
   Plus,
   GripVertical,
+  Timer,
+  FileSearch,
+  Search,
+  Workflow,
+  FileType,
 } from "lucide-react";
 import {
   importPreview,
@@ -38,6 +43,30 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+
+function TipsCarousel() {
+  const tips = [
+    "Large documents take longer — the AI reads every page thoroughly",
+    "PDFs with clear headings and code blocks work best",
+    "You can edit everything in the preview before approving",
+    "The AI sets each module's difficulty based on content complexity",
+    "Better source material = better course output",
+  ];
+  const [tipIdx, setTipIdx] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTipIdx((p) => (p + 1) % tips.length), 5000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <div>
+      <p className="text-sm font-medium text-card-foreground">
+        <span key={tipIdx} className="inline-block animate-in fade-in slide-in-from-top-1 duration-500">
+          {tips[tipIdx]}
+        </span>
+      </p>
+    </div>
+  );
+}
 
 export default function ImportCoursePage() {
   // ── Step tracking ───────────────────────────────────────────────────
@@ -96,6 +125,65 @@ export default function ImportCoursePage() {
       setStep("done");
     },
   });
+
+  // ── Progress simulation ──────────────────────────────────────────────
+  const [progressPhase, setProgressPhase] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [phaseDescription, setPhaseDescription] = useState("");
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const progressIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const PHASES = [
+    { label: "Uploading file", icon: Upload, duration: 8 },
+    { label: "Extracting text content", icon: FileSearch, duration: 20 },
+    { label: "Analyzing content structure", icon: Search, duration: 25 },
+    { label: "Structuring modules & lessons", icon: Workflow, duration: 30 },
+    { label: "Generating course metadata", icon: Sparkles, duration: 15 },
+    { label: "Finalizing", icon: FileType, duration: 10 },
+  ];
+
+  useEffect(() => {
+    if (previewMutation.isPending) {
+      setProgressPhase(0);
+      setElapsedSeconds(0);
+      setPhaseDescription(PHASES[0].label);
+
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+
+      progressIntervalRef.current = setInterval(() => {
+        setProgressPhase((prev) => {
+          const next = Math.min(prev + 1, PHASES.length - 1);
+          setPhaseDescription(PHASES[next].label);
+          return next;
+        });
+      }, 4000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (progressIntervalRef.current) clearInterval(progressIntervalRef.current);
+    };
+  }, [previewMutation.isPending]);
+
+  const progressPercent = Math.min(
+    (PHASES.slice(0, progressPhase).reduce((s, p) => s + p.duration, 0) +
+      (progressPhase < PHASES.length
+        ? (elapsedSeconds % 12) * (PHASES[Math.min(progressPhase, PHASES.length - 1)]?.duration || 10) / 12
+        : 0)) /
+      PHASES.reduce((s, p) => s + p.duration, 0) *
+      100,
+    95
+  );
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+  };
 
   const handleUpload = (e: React.FormEvent) => {
     e.preventDefault();
@@ -233,7 +321,7 @@ export default function ImportCoursePage() {
       </div>
 
       {/* ───────────────────── STEP 1: UPLOAD ──────────────────────────── */}
-      {step === "upload" && (
+      {step === "upload" && !previewMutation.isPending && (
         <form onSubmit={handleUpload} className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-5">
             {/* Main content */}
@@ -858,24 +946,111 @@ export default function ImportCoursePage() {
         </div>
       )}
 
-      {/* Loading state for upload step */}
+      {/* Loading state for upload step — full animated progress indicator */}
       {step === "upload" && previewMutation.isPending && (
-        <div className="rounded-2xl border border-border bg-card p-6">
-          <div className="flex items-center gap-2 text-lg font-semibold text-card-foreground mb-4">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
-            AI is analyzing your content...
+        <div className="rounded-2xl border border-border bg-card p-8">
+          <div className="mx-auto max-w-lg text-center">
+            {/* Animated icon */}
+            <div className="relative mx-auto mb-6 flex h-20 w-20 items-center justify-center">
+              <div className="absolute inset-0 animate-ping rounded-full bg-primary/20" />
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-primary/30 to-primary/10">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            </div>
+
+            {/* Title */}
+            <h2 className="text-xl font-bold tracking-tight text-card-foreground">
+              AI is building your course
+            </h2>
+            <p className="mt-2 text-muted-foreground">
+              Analyzing content, structuring modules, and generating lessons
+            </p>
+
+            {/* Progress bar */}
+            <div className="mt-8">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium text-primary">{phaseDescription}</span>
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <Timer className="h-3.5 w-3.5" />
+                  {formatTime(elapsedSeconds)}
+                </span>
+              </div>
+              <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-primary via-primary/80 to-primary/60 transition-all duration-700 ease-out"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Phase timeline */}
+            <div className="mt-8 space-y-3 text-left">
+              {PHASES.map((phase, idx) => {
+                const isActive = idx === progressPhase;
+                const isDone = idx < progressPhase;
+                const PhaseIcon = phase.icon;
+                return (
+                  <div
+                    key={phase.label}
+                    className={cn(
+                      "flex items-center gap-3 rounded-xl p-3 transition-all duration-500",
+                      isActive && "bg-primary/5 ring-1 ring-primary/20",
+                      isDone && "opacity-60",
+                      !isActive && !isDone && "opacity-30"
+                    )}
+                  >
+                    <div
+                      className={cn(
+                        "flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-500",
+                        isDone
+                          ? "bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400"
+                          : isActive
+                            ? "bg-primary/20 text-primary"
+                            : "bg-muted text-muted-foreground"
+                      )}
+                    >
+                      {isDone ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : isActive ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <PhaseIcon className="h-4 w-4" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <p
+                        className={cn(
+                          "text-sm font-medium transition-colors",
+                          isActive && "text-card-foreground",
+                          !isActive && "text-muted-foreground"
+                        )}
+                      >
+                        {phase.label}
+                      </p>
+                      {isActive && (
+                        <p className="mt-0.5 text-xs text-muted-foreground animate-pulse">
+                          Processing...
+                        </p>
+                      )}
+                      {isDone && (
+                        <p className="mt-0.5 text-xs text-emerald-600 dark:text-emerald-400">
+                          Complete
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Tips carousel */}
+            <div className="mt-8 rounded-xl border border-border bg-background/50 p-4">
+              <div className="flex items-start gap-3">
+                <Brain className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+                <TipsCarousel />
+              </div>
+            </div>
           </div>
-          <div className="space-y-3">
-            <Skeleton className="h-5 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-20 w-full" />
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-32 w-full" />
-          </div>
-          <p className="mt-4 text-sm text-muted-foreground">
-            Extracting key concepts, structuring modules, and generating lessons...
-          </p>
         </div>
       )}
     </div>
