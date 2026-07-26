@@ -27,6 +27,9 @@ dependencies = [
     "celery[redis]>=5.4.0",
 ]
 
+[project.scripts]
+dsir-seed = "src.db.seed:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.2.0",

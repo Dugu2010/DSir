@@ -1,8 +1,9 @@
 import asyncio
+import logging
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.session import AsyncSessionLocal
@@ -613,18 +614,31 @@ async def _seed_course(db: AsyncSession, course_data: dict[str, Any]) -> Course:
 
 
 async def seed_courses(db: AsyncSession) -> None:
+    existing_slugs = {
+        row[0]
+        for row in (await db.execute(select(Course.slug))).all()
+    }
     for data in _COURSE_DEFINITIONS:
-        await _seed_course(db, data)
+        if data["slug"] not in existing_slugs:
+            await _seed_course(db, data)
+            existing_slugs.add(data["slug"])
 
 
-async def seed_projects(db: AsyncSession, course_ids: list[uuid.UUID]) -> None:
+async def seed_projects(db: AsyncSession) -> None:
     """Seed projects linked to the matching course by slug."""
     result = await db.execute(select(Course.slug, Course.id))
     slug_to_id: dict[str, uuid.UUID] = {}
     for slug, course_id in result:
         slug_to_id[slug] = course_id
 
+    existing_slugs = {
+        row[0]
+        for row in (await db.execute(select(Project.slug))).all()
+    }
+
     for project_data in _PROJECT_DEFINITIONS:
+        if project_data["slug"] in existing_slugs:
+            continue
         course_id = slug_to_id.get(project_data["course_slug"])
         db.add(
             Project(
@@ -641,6 +655,10 @@ async def seed_projects(db: AsyncSession, course_ids: list[uuid.UUID]) -> None:
 
 
 async def seed_roadmap(db: AsyncSession, course_ids: list[uuid.UUID]) -> None:
+    existing = await db.scalar(select(Roadmap).where(Roadmap.slug == "full-stack-developer"))
+    if existing:
+        return
+
     roadmap = Roadmap(
         id=uuid.uuid4(),
         slug="full-stack-developer",
@@ -657,21 +675,31 @@ async def seed_roadmap(db: AsyncSession, course_ids: list[uuid.UUID]) -> None:
 
 async def seed_database() -> None:
     """Seed courses, projects, and roadmaps into the database."""
+    logger = logging.getLogger("dsir.seed")
     async with AsyncSessionLocal() as db:
+        course_count_before = await db.scalar(select(func.count(Course.id)))
         await seed_courses(db)
         await db.flush()
 
         result = await db.execute(select(Course.id))
         course_ids = [row[0] for row in result]
 
-        await seed_projects(db, course_ids)
+        await seed_projects(db)
         await seed_roadmap(db, course_ids)
         await db.commit()
 
+        course_count_after = await db.scalar(select(func.count(Course.id)))
+        logger.info("Seeding complete. Courses: %d -> %d", course_count_before or 0, course_count_after or 0)
 
-async def main() -> None:
+
+async def _async_main() -> None:
     await seed_database()
 
 
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    asyncio.run(_async_main())
+
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
