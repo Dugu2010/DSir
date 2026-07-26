@@ -76,6 +76,16 @@ export default function ImportCoursePage() {
   const [sourceText, setSourceText] = useState("");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [inputMode, setInputMode] = useState<"text" | "pdf">("text");
+  const [provider, setProvider] = useState<string>("gemini");
+
+  const PROVIDER_OPTIONS: { value: string; label: string; keyName: string }[] = [
+    { value: "gemini", label: "Google Gemini", keyName: "Gemini API key" },
+    { value: "openai", label: "OpenAI", keyName: "OpenAI API key" },
+    { value: "anthropic", label: "Anthropic", keyName: "Anthropic API key" },
+    { value: "custom", label: "Custom (OpenAI-compatible)", keyName: "API key" },
+    { value: "ollama", label: "Ollama", keyName: "API key (optional)" },
+    { value: "mock", label: "Mock (demo only)", keyName: "" },
+  ];
   const [apiKey, setApiKey] = useState("");
   const [apiUrl, setApiUrl] = useState("https://shulker.in/api/colide_api_gateway-v1.0/");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -94,14 +104,14 @@ export default function ImportCoursePage() {
       if (inputMode === "pdf" && pdfFile) {
         return importPreviewPdf({
           file: pdfFile,
-          provider: "custom",
+          provider,
           api_key: apiKey,
           api_url: apiUrl,
         });
       }
       return importPreview({
         source_text: sourceText,
-        provider: "custom",
+        provider,
         api_key: apiKey,
         api_url: apiUrl,
       });
@@ -209,9 +219,10 @@ export default function ImportCoursePage() {
     }
   }, []);
 
+  const requiresKey = provider !== "mock" && provider !== "ollama";
   const canUpload = inputMode === "text"
-    ? sourceText.trim().length > 0 && apiKey.trim().length > 0
-    : pdfFile !== null && apiKey.trim().length > 0;
+    ? sourceText.trim().length > 0 && (!requiresKey || apiKey.trim().length > 0)
+    : pdfFile !== null && (!requiresKey || apiKey.trim().length > 0);
 
   // ── Editing helpers ──────────────────────────────────────────────────
   const toggleModule = (idx: number) => {
@@ -433,30 +444,54 @@ export default function ImportCoursePage() {
                 </div>
               )}
 
-              {/* API Key */}
+              {/* Provider & API Key */}
               <div className="rounded-2xl border border-border bg-card p-6">
                 <label className="flex items-center gap-2 text-lg font-semibold text-card-foreground">
                   <Key className="h-5 w-5 text-primary" />
-                  Your AI API Key
+                  AI Provider
                 </label>
                 <p className="mb-3 mt-1 text-sm text-muted-foreground">
-                  Your API key is sent directly to the AI provider. It is never stored on this server.
+                  Choose an AI provider. Your API key is sent directly to the provider and is never stored on this server.
                 </p>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="Enter your API key"
-                  className="mb-3 w-full rounded-xl border border-border bg-background px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
-                  required
-                />
-                <input
-                  type="text"
-                  value={apiUrl}
-                  onChange={(e) => setApiUrl(e.target.value)}
-                  placeholder="API endpoint URL (defaults to shulker.in)"
-                  className="w-full rounded-xl border border-border bg-background px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
-                />
+
+                <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">Provider</label>
+                    <select
+                      value={provider}
+                      onChange={(e) => setProvider(e.target.value)}
+                      className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary"
+                    >
+                      {PROVIDER_OPTIONS.map((p) => (
+                        <option key={p.value} value={p.value}>{p.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                      API Key
+                      {provider === "mock" && " (not required for mock)"}
+                    </label>
+                    <input
+                      type="password"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                      placeholder={PROVIDER_OPTIONS.find((p) => p.value === provider)?.keyName || "Enter your API key"}
+                      required={provider !== "mock" && provider !== "ollama"}
+                      className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                {provider === "custom" && (
+                  <input
+                    type="text"
+                    value={apiUrl}
+                    onChange={(e) => setApiUrl(e.target.value)}
+                    placeholder="API endpoint URL (optional)"
+                    className="w-full rounded-xl border border-border bg-background px-4 py-2.5 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:ring-1 focus:ring-primary"
+                  />
+                )}
               </div>
 
               <Button

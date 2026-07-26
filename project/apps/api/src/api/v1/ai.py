@@ -13,7 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.ai.manager import AIError, AIManager, get_ai_manager
 from src.ai.prompts import PromptManager
 from src.ai.protocols import Message, Role
-from src.ai.providers import CustomProvider
+from src.ai.providers import (
+    AnthropicProvider,
+    CustomProvider,
+    GeminiProvider,
+    OllamaProvider,
+    OpenAIProvider,
+)
 from src.core.dependencies import get_current_active_user, require_content_creator
 from src.core.rate_limit import RateLimiter
 from src.db.session import get_db
@@ -140,6 +146,28 @@ def _parse_modules_from_ai_response(parsed: dict[str, Any]) -> list[ModulePropos
     return modules
 
 
+def _build_provider_from_request(
+    provider: str,
+    api_key: str,
+    api_url: str | None,
+):
+    """Build an AI provider from user-supplied request parameters."""
+    name = provider.lower()
+    if name == "openai":
+        return OpenAIProvider(api_key=api_key)
+    if name == "anthropic":
+        return AnthropicProvider(api_key=api_key)
+    if name == "gemini":
+        return GeminiProvider(api_key=api_key)
+    if name == "ollama":
+        return OllamaProvider(base_url=api_url)
+    if name == "custom":
+        return CustomProvider(api_key=api_key, base_url=api_url)
+    from src.ai.providers import MockProvider
+
+    return MockProvider()
+
+
 async def _get_ai_response(
     source_text: str,
     provider: str | None,
@@ -155,8 +183,8 @@ async def _get_ai_response(
         ),
     ]
 
-    if provider == "custom" and api_key:
-        prov = CustomProvider(api_key=api_key, base_url=api_url)
+    if provider and api_key:
+        prov = _build_provider_from_request(provider, api_key, api_url)
         manager = AIManager(prov)
     elif provider:
         manager = get_ai_manager(provider)
