@@ -10,7 +10,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.ai.manager import AIManager, get_ai_manager
+from src.ai.manager import AIError, AIManager, get_ai_manager
 from src.ai.prompts import PromptManager
 from src.ai.protocols import Message, Role
 from src.ai.providers import CustomProvider
@@ -163,7 +163,19 @@ async def _get_ai_response(
     else:
         manager = get_ai_manager()
 
-    response = await manager.generate(messages, temperature=0.4, max_tokens=8000)
+    try:
+        response = await manager.generate(messages, temperature=0.4, max_tokens=8000)
+    except AIError as exc:
+        error_msg = str(exc)
+        # Extract the underlying error message from the retry wrapper
+        if "failed after" in error_msg and ":" in error_msg:
+            underlying = error_msg.split(":", 1)[-1].strip()
+            if underlying:
+                error_msg = underlying
+        raise HTTPException(
+            status_code=502,
+            detail=f"AI provider error: {error_msg}. Check your API key and endpoint URL.",
+        ) from None
 
     try:
         return _extract_json(response.content)
