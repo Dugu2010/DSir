@@ -1,9 +1,9 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { BookOpen, Clock } from "lucide-react";
 import { Course } from "@/lib/api";
+import { CourseBanner } from "@/components/course-banner";
 
 const difficultyColors: Record<string, string> = {
   beginner: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
@@ -29,12 +29,11 @@ export function CourseCard({ course, progressPercent }: CourseCardProps) {
       className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card transition hover:-translate-y-0.5 hover:shadow-card"
     >
       <div className="relative h-48 overflow-hidden">
-        <Image
-          src={course.thumbnail ?? "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop"}
+        <CourseBanner
+          title={course.title}
+          thumbnail={course.thumbnail}
           alt={course.title}
-          fill
-          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-          className="object-cover transition duration-300 group-hover:scale-105"
+          className="h-full w-full transition duration-300 group-hover:scale-105"
         />
         <div className="absolute left-3 top-3">
           <span

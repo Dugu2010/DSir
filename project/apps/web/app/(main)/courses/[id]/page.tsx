@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import Image from "next/image";
 import Link from "next/link";
 import {
   BookOpen,
@@ -20,6 +19,7 @@ import {
 import { createBookmark, createEnrollment, deleteBookmark, fetchBookmarks, fetchCourseDetail } from "@/lib/api";
 import { useAuthStore } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { CourseBanner } from "@/components/course-banner";
 import { ErrorMessage } from "@/components/ui/error-message";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -90,10 +90,11 @@ export default function CourseDetailPage() {
   }
 
   if (error || !data) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return (
       <div className="space-y-4">
         <ErrorMessage>
-          Failed to load course details.{" "}
+          Failed to load course details: {errorMessage}.{" "}
           <Button onClick={() => refetch()} variant="secondary" size="sm" className="ml-2">
             Retry
           </Button>
@@ -204,12 +205,11 @@ export default function CourseDetailPage() {
           </div>
 
           <div className="relative hidden aspect-video overflow-hidden rounded-2xl lg:block">
-            <Image
-              src={course.thumbnail ?? "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=800&auto=format&fit=crop"}
+            <CourseBanner
+              title={course.title}
+              thumbnail={course.thumbnail}
               alt={course.title}
-              fill
-              sizes="(max-width: 1024px) 100vw, 50vw"
-              className="object-cover"
+              className="h-full w-full"
             />
           </div>
         </div>
