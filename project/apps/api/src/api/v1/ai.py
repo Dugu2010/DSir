@@ -257,8 +257,7 @@ async def _create_course_from_proposal(
 @router.post("/import-preview", response_model=ImportPreviewResponse)
 async def import_preview(
     data: ImportContentRequest,
-    db: AsyncSession = Depends(get_db),
-    _current_user: User = Depends(require_content_creator),
+    _current_user: User = Depends(get_current_active_user),
     _rate_limit: None = Depends(RateLimiter("5/minute")),
 ) -> ImportPreviewResponse:
     """Analyze source text and return an AI-generated course proposal without saving to DB.
@@ -288,7 +287,8 @@ async def import_approve(
     _current_user: User = Depends(require_content_creator),
     _rate_limit: None = Depends(RateLimiter("10/minute")),
 ) -> ImportContentResponse:
-    """Create a course in the database from an approved (possibly user-edited) proposal."""
+    """Create a course in the database from an approved (possibly user-edited) proposal.
+    Requires content_creator, instructor, or admin role."""
     course = await _create_course_from_proposal(proposal, db)
     await db.commit()
     await db.refresh(course)
@@ -355,8 +355,7 @@ async def import_pdf(
     provider: str | None = Form(None),
     api_key: str | None = Form(None),
     api_url: str | None = Form(None),
-    db: AsyncSession = Depends(get_db),
-    _current_user: User = Depends(require_content_creator),
+    _current_user: User = Depends(get_current_active_user),
     _rate_limit: None = Depends(RateLimiter("5/minute")),
 ) -> ImportPreviewResponse:
     """Upload a PDF file and return an AI preview of the course structure (no DB save)."""
