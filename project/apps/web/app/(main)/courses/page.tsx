@@ -64,9 +64,9 @@ export default function CoursesPage() {
               href={tab.href}
               className={cn(
                 "whitespace-nowrap rounded-full px-4 py-2 text-sm font-medium transition",
-                isActive
-                  ? "bg-blue-600 text-white"
-                  : "bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
+              isActive
+                ? "bg-primary text-primary-foreground"
+                : "bg-card text-card-foreground hover:bg-accent"
               )}
             >
               {tab.name}
@@ -76,7 +76,7 @@ export default function CoursesPage() {
       </div>
 
       {/* Hero */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-600 to-violet-600 px-6 py-12 text-white sm:px-12 sm:py-16">
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary to-indigo-600 px-6 py-12 text-white sm:px-12 sm:py-16">
         <div className="relative z-10 max-w-2xl">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/20 px-3 py-1 text-sm font-medium backdrop-blur-sm">
             <Sparkles className="h-4 w-4" />
@@ -85,7 +85,7 @@ export default function CoursesPage() {
           <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
             Explore our courses
           </h1>
-          <p className="mt-4 text-lg text-blue-100">
+          <p className="mt-4 text-lg text-white/90">
             Master programming with hands-on courses, interactive lessons, and AI-powered mentorship.
           </p>
         </div>
@@ -101,14 +101,14 @@ export default function CoursesPage() {
             <label htmlFor="course-search" className="sr-only">
               Search courses
             </label>
-            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
             <input
               id="course-search"
               type="text"
               placeholder="Search courses..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-slate-900 focus:border-blue-500 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              className="w-full rounded-xl border border-border bg-card py-2.5 pl-10 pr-4 text-foreground focus:border-primary focus:ring-primary"
             />
           </div>
           <div className="flex flex-wrap gap-2">
@@ -119,7 +119,7 @@ export default function CoursesPage() {
               id="category-filter"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              className="rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground focus:border-primary focus:ring-primary"
             >
               {categories.map((c) => (
                 <option key={c} value={c}>
@@ -134,7 +134,7 @@ export default function CoursesPage() {
               id="language-filter"
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              className="rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground focus:border-primary focus:ring-primary"
             >
               {languages.map((l) => (
                 <option key={l} value={l}>
@@ -149,7 +149,7 @@ export default function CoursesPage() {
               id="difficulty-filter"
               value={difficulty}
               onChange={(e) => setDifficulty(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              className="rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground focus:border-primary focus:ring-primary"
             >
               {difficulties.map((d) => (
                 <option key={d} value={d}>
@@ -164,7 +164,7 @@ export default function CoursesPage() {
               id="sort-filter"
               value={sort}
               onChange={(e) => setSort(e.target.value)}
-              className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-900 focus:border-blue-500 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              className="rounded-xl border border-border bg-card px-4 py-2.5 text-sm text-foreground focus:border-primary focus:ring-primary"
             >
               {sortOptions.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -198,7 +198,7 @@ export default function CoursesPage() {
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
-              className="overflow-hidden rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900"
+              className="overflow-hidden rounded-2xl border border-border bg-card"
             >
               <Skeleton className="h-48 w-full rounded-none" />
               <div className="p-5">
@@ -210,12 +210,12 @@ export default function CoursesPage() {
           ))}
         </div>
       ) : courses.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 py-16 dark:border-slate-700">
-          <Filter className="h-12 w-12 text-slate-400" />
-          <h3 className="mt-4 text-lg font-semibold text-slate-900 dark:text-white">
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/50 py-16">
+          <Filter className="h-12 w-12 text-muted-foreground" />
+          <h3 className="mt-4 text-lg font-semibold text-card-foreground">
             No courses found
           </h3>
-          <p className="mt-2 max-w-md text-center text-slate-600 dark:text-slate-400">
+          <p className="mt-2 max-w-md text-center text-muted-foreground">
             Try adjusting your filters or search query to find what you&apos;re looking for.
           </p>
           <Button

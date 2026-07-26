@@ -9,6 +9,7 @@ import { login, fetchMe } from "@/lib/axios";
 import { useApiError } from "@/hooks/use-api-error";
 import { useAuthStore } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ErrorMessage } from "@/components/ui/error-message";
@@ -47,9 +48,9 @@ export default function LoginPage() {
   };
 
   return (
-    <>
-      <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Welcome back</h1>
-      <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+    <Card className="w-full max-w-md border-none bg-transparent shadow-none">
+      <CardTitle className="text-2xl">Welcome back</CardTitle>
+      <p className="mt-2 text-sm text-muted-foreground">
         Sign in to continue your learning journey
       </p>
 
@@ -59,13 +60,13 @@ export default function LoginPage() {
         <div>
           <Label htmlFor="email">Email</Label>
           <Input id="email" type="email" {...register("email")} className="mt-1" />
-          {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>}
+          {errors.email && <p className="mt-1 text-xs text-destructive">{errors.email.message}</p>}
         </div>
 
         <div>
           <Label htmlFor="password">Password</Label>
           <Input id="password" type="password" {...register("password")} className="mt-1" />
-          {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>}
+          {errors.password && <p className="mt-1 text-xs text-destructive">{errors.password.message}</p>}
         </div>
 
         <Button type="submit" loading={isSubmitting} className="w-full">
@@ -73,12 +74,12 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
-        <Link href="/register" className="font-semibold text-blue-600 hover:underline dark:text-blue-400">
+        <Link href="/register" className="font-semibold text-primary hover:underline">
           Register
         </Link>
       </p>
-    </>
+    </Card>
   );
 }

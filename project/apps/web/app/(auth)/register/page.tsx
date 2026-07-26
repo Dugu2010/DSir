@@ -9,6 +9,7 @@ import { register as registerUser, fetchMe } from "@/lib/axios";
 import { useApiError } from "@/hooks/use-api-error";
 import { useAuthStore } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
+import { Card, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ErrorMessage } from "@/components/ui/error-message";
@@ -51,9 +52,9 @@ export default function RegisterPage() {
   };
 
   return (
-    <>
-      <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Create an account</h1>
-      <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+    <Card className="w-full max-w-md border-none bg-transparent shadow-none">
+      <CardTitle className="text-2xl">Create an account</CardTitle>
+      <p className="mt-2 text-sm text-muted-foreground">
         Start your AI-powered learning journey
       </p>
 
@@ -63,26 +64,26 @@ export default function RegisterPage() {
         <div>
           <Label htmlFor="email">Email</Label>
           <Input id="email" type="email" {...register("email")} className="mt-1" />
-          {errors.email && <p className="mt-1 text-xs text-red-500">{errors.email.message}</p>}
+          {errors.email && <p className="mt-1 text-xs text-destructive">{errors.email.message}</p>}
         </div>
 
         <div>
           <Label htmlFor="fullName">Full Name</Label>
           <Input id="fullName" type="text" {...register("fullName")} className="mt-1" />
-          {errors.fullName && <p className="mt-1 text-xs text-red-500">{errors.fullName.message}</p>}
+          {errors.fullName && <p className="mt-1 text-xs text-destructive">{errors.fullName.message}</p>}
         </div>
 
         <div>
           <Label htmlFor="password">Password</Label>
           <Input id="password" type="password" {...register("password")} className="mt-1" />
-          {errors.password && <p className="mt-1 text-xs text-red-500">{errors.password.message}</p>}
+          {errors.password && <p className="mt-1 text-xs text-destructive">{errors.password.message}</p>}
         </div>
 
         <div>
           <Label htmlFor="confirmPassword">Confirm Password</Label>
           <Input id="confirmPassword" type="password" {...register("confirmPassword")} className="mt-1" />
           {errors.confirmPassword && (
-            <p className="mt-1 text-xs text-red-500">{errors.confirmPassword.message}</p>
+            <p className="mt-1 text-xs text-destructive">{errors.confirmPassword.message}</p>
           )}
         </div>
 
@@ -91,12 +92,12 @@ export default function RegisterPage() {
         </Button>
       </form>
 
-      <p className="mt-6 text-center text-sm text-slate-600 dark:text-slate-400">
+      <p className="mt-6 text-center text-sm text-muted-foreground">
         Already have an account?{" "}
-        <Link href="/login" className="font-semibold text-blue-600 hover:underline dark:text-blue-400">
+        <Link href="/login" className="font-semibold text-primary hover:underline">
           Sign in
         </Link>
       </p>
-    </>
+    </Card>
   );
 }

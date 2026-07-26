@@ -51,7 +51,7 @@ function CodeRenderer({
   const codeString = String(children).replace(/\n$/, "");
   if (!className || inline) {
     return (
-      <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-sm dark:bg-slate-800">
+      <code className="rounded bg-secondary px-1 py-0.5 font-mono text-sm text-secondary-foreground">
         {children}
       </code>
     );
