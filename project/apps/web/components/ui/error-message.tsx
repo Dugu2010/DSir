@@ -10,7 +10,7 @@ export function ErrorMessage({ children, className, details }: ErrorMessageProps
   return (
     <div
       className={cn(
-        "rounded-lg bg-red-50 p-4 text-sm text-red-600 dark:bg-red-950 dark:text-red-200",
+        "rounded-xl border border-destructive/20 bg-destructive/5 p-4 text-sm text-destructive",
         className
       )}
       aria-live="polite"
@@ -18,10 +18,10 @@ export function ErrorMessage({ children, className, details }: ErrorMessageProps
       <div className="font-medium">{children}</div>
       {details && (
         <details className="mt-2">
-          <summary className="cursor-pointer text-xs text-red-500 dark:text-red-300">
+          <summary className="cursor-pointer text-xs opacity-80">
             Technical details
           </summary>
-          <pre className="mt-2 whitespace-pre-wrap break-words rounded bg-red-100 p-2 text-xs text-red-700 dark:bg-red-900 dark:text-red-100">
+          <pre className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-destructive/10 p-2 text-xs">
             {details}
           </pre>
         </details>

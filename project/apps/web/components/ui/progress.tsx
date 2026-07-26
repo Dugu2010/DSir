@@ -25,7 +25,7 @@ export function Progress({
   return (
     <div
       className={cn(
-        "w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800",
+        "w-full overflow-hidden rounded-full bg-muted",
         sizes[size],
         className
       )}
@@ -33,7 +33,7 @@ export function Progress({
     >
       <div
         className={cn(
-          "h-full rounded-full bg-primary transition-all duration-500 ease-out",
+          "h-full rounded-full bg-gradient-to-r from-primary to-primary/80 transition-all duration-700 ease-out",
           barClassName
         )}
         style={{ width: `${percentage}%` }}

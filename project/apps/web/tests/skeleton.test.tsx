@@ -6,7 +6,7 @@ describe("Skeleton", () => {
     const { container } = render(<Skeleton />);
     const div = container.firstChild as HTMLElement;
     expect(div.className).toContain("animate-pulse");
-    expect(div.className).toContain("rounded-lg");
+    expect(div.className).toContain("rounded-xl");
   });
 
   it("applies custom className", () => {

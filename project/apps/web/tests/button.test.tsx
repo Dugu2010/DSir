@@ -17,6 +17,6 @@ describe("Button", () => {
     expect(screen.getByRole("button")).toHaveClass("bg-red-600");
 
     rerender(<Button variant="secondary">Cancel</Button>);
-    expect(screen.getByRole("button")).toHaveClass("bg-slate-100");
+    expect(screen.getByRole("button")).toHaveClass("bg-secondary");
   });
 });
