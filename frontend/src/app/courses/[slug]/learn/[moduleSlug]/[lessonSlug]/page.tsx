@@ -31,9 +31,14 @@ export default function LessonPage() {
   const queryClient = useQueryClient();
   const { isAuthenticated } = useAuth();
   const contentRef = useRef<HTMLDivElement>(null);
+  const sandboxRef = useRef<HTMLDivElement>(null);
 
   const [drawer, setDrawer] = useState<DrawerState>('closed');
   const [showBackToTop, setShowBackToTop] = useState(false);
+
+  const scrollToSandbox = () => {
+    sandboxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
 
   // Scroll to top watcher
   useEffect(() => {
@@ -238,6 +243,12 @@ export default function LessonPage() {
           </div>
 
           <div className="hidden sm:flex items-center gap-1.5">
+            <button
+              onClick={scrollToSandbox}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-50 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition-colors"
+            >
+              <Play className="h-3.5 w-3.5 fill-current" /> Try it Out
+            </button>
             {lesson.estimated_duration_minutes && (
               <span className="flex items-center gap-1 text-xs text-[#6b7280] dark:text-[#8b8fa3] px-2 py-1 rounded-lg bg-[#f1f3f5] dark:bg-white/5">
                 <Clock className="h-3.5 w-3.5" /> {lesson.estimated_duration_minutes} min
@@ -285,7 +296,7 @@ export default function LessonPage() {
             </div>
 
             {/* Try it Yourself */}
-            <div className="mt-8 pt-8 border-t border-[#e8ecf1] dark:border-white/5">
+            <div ref={sandboxRef} className="mt-8 pt-8 border-t border-[#e8ecf1] dark:border-white/5">
               <div className="flex items-center gap-3 mb-4">
                 <div className="h-10 w-10 rounded-xl bg-emerald-100 dark:bg-emerald-500/10 flex items-center justify-center">
                   <Play className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
