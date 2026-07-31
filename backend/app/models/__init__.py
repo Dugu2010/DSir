@@ -778,7 +778,7 @@ class Certificate(Base):
     course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False)
     certificate_number = Column(String(50), unique=True, nullable=False)
     issued_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
-    metadata = Column(JSON, nullable=True)
+    cert_metadata = Column(JSON, nullable=True)
 
     __table_args__ = (UniqueConstraint("user_id", "course_id"),)
 

@@ -377,7 +377,7 @@ def upgrade() -> None:
         sa.Column("course_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("courses.id", ondelete="CASCADE"), nullable=False),
         sa.Column("certificate_number", sa.String(50), unique=True, nullable=False),
         sa.Column("issued_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
-        sa.Column("metadata", postgresql.JSON, nullable=True),
+        sa.Column("cert_metadata", postgresql.JSON, nullable=True),
         sa.UniqueConstraint("user_id", "course_id"),
     )
 
