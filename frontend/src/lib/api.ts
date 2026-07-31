@@ -21,7 +21,7 @@ class ApiError extends Error {
   }
 }
 
-async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+async function request<T = any>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { method = "GET", body, headers = {}, auth = true } = options;
 
   const config: RequestInit = {
@@ -219,9 +219,9 @@ export { ApiError };
 // ── Generic API client (used by auth-store and learn/practice pages) ──
 
 export const api = {
-  get: <T>(endpoint: string) => request<T>(endpoint),
-  post: <T>(endpoint: string, body?: unknown) => request<T>(endpoint, { method: "POST", body }),
-  put: <T>(endpoint: string, body?: unknown) => request<T>(endpoint, { method: "PUT", body }),
-  patch: <T>(endpoint: string, body?: unknown) => request<T>(endpoint, { method: "PATCH", body }),
-  delete: <T>(endpoint: string) => request<T>(endpoint, { method: "DELETE" }),
+  get: <T = any>(endpoint: string) => request<T>(endpoint),
+  post: <T = any>(endpoint: string, body?: unknown) => request<T>(endpoint, { method: "POST", body }),
+  put: <T = any>(endpoint: string, body?: unknown) => request<T>(endpoint, { method: "PUT", body }),
+  patch: <T = any>(endpoint: string, body?: unknown) => request<T>(endpoint, { method: "PATCH", body }),
+  delete: <T = any>(endpoint: string) => request<T>(endpoint, { method: "DELETE" }),
 };
