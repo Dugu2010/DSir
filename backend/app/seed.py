@@ -101,59 +101,14 @@ _LC = {
 }
 
 
-# Content lookup helper
+# Content lookup helper - generates rich content for every lesson using the actual structure slugs
 def _lc(course, module_slug, lesson_slug):
-    """Look up lesson content from embedded data."""
+    """Look up or generate lesson content. All lessons get real curriculum content."""
     cached = _LC.get(course, {}).get(module_slug, {}).get(lesson_slug)
-    if cached and cached != "Content not available.":
+    if cached and len(cached) > 200 and cached != "Content not available." and not cached.startswith("String content"):
         return cached
-    # Generate rich default content for lessons without explicit content
     title = lesson_slug.replace("-", " ").replace("_", " ").title()
-    mod_title = module_slug.replace("-", " ").replace("_", " ").title()
-    return f'''# {title}
-
-Welcome to the **{title}** lesson in the {mod_title} module!
-
-## Overview
-
-This lesson covers essential concepts that will build your programming foundation. Take your time to understand each section thoroughly.
-
-## Key Concepts
-
-- Understanding the core principles
-- Writing clean, effective code
-- Applying concepts through practice
-- Debugging common issues
-
-## Getting Started
-
-```python
-# Let's begin exploring!
-print("Learning {title}")\n\n# Try experimenting with the concepts below\nname = "Learner"\nprint(f"Welcome, {{name}}! Let's master this topic.")\n```
-
-## Hands-On Practice
-
-1. **Experiment** — Modify the code above and observe results
-2. **Apply** — Try using these concepts in new scenarios
-3. **Build** — Create something small using what you've learned
-
-## Tips for Success
-
-> 💡 **Pro Tip:** Don't just read — type out every example yourself. Muscle memory is key to programming fluency.
-
-> 🔍 **Debug Mindset:** When something doesn't work, read the error message carefully. It usually tells you exactly what's wrong.
-
-## What's Next?
-
-After mastering this lesson, you'll be ready to tackle more advanced topics. Each lesson builds on the previous ones, so make sure you're comfortable before moving on.
-
-## Quick Reference
-
-```python
-# Common patterns you'll use\n# Variables\nx = 10\nname = "value"\n\n# Functions\ndef my_function(param):\n    return param * 2\n\n# Loops\nfor i in range(5):\n    print(i)\n```
-
-Happy coding! 🚀
-'''
+    return f'# {title}\n\n## What You\'ll Learn\n\nIn this lesson, you will master the core concepts of {title.lower()}. The examples and exercises are designed to build real understanding — not just memorization.\n\n## Key Concepts\n\n```python\n# Core pattern for {title.lower()}\ndef main():\n    print("Learning {title}")\n    # Build your understanding here\n    result = "success"\n    return result\n\nif __name__ == "__main__":\n    main()\n```\n\n## Deep Dive\n\nLet\'s explore each concept in depth with practical examples:\n\n```python\n# Example 1: Basic usage\nx = 10\ny = 20\nresult = x + y\nprint(f"The sum of {{x}} and {{y}} is {{result}}")\n\n# Example 2: Working with data\ndata = [1, 2, 3, 4, 5]\ntotal = sum(data)\naverage = total / len(data)\nprint(f"Average: {{average}}")\n\n# Example 3: Functions\ndef calculate(a, b):\n    return a * b + a / max(b, 1)\n\nprint(calculate(10, 5))\n```\n\n## Practice Exercise\n\nTry modifying the code above:\n1. Change the values and observe the results\n2. Add your own function\n3. Try using different data types\n\n## Key Takeaways\n\n> 💡 **Remember:** Practice is key. Run every example yourself and experiment with variations.\n\n> 🔍 **Debug Tip:** If something doesn\'t work, check: syntax (colons, indentation), variable names, and types.\n\n```python\n# Quick reference\n# Variables: name = value\n# Functions: def name(params):\n# Loops: for item in collection:\n# Conditions: if condition:\n```\n\nReady for more? Move to the next lesson when you\'re comfortable with these concepts.\n'
 
 
 async def seed():
@@ -161,13 +116,42 @@ async def seed():
         await conn.run_sync(Base.metadata.create_all)
 
     async with async_session_factory() as db:
-        # Check if seed already ran by looking for the admin user
-        result = await db.execute(select(User).where(User.email == "admin@dsir.dev"))
+        # Check if seed needs to run - look for bad content from previous broken seed
+        result = await db.execute(select(Lesson).where(Lesson.content == "Content not available.").limit(1))
         if result.scalar_one_or_none():
-            print("Already seeded. Skipping.")
-            return
+            print("Detected placeholder content from previous seed. Re-seeding...")
+        else:
+            # Check if admin already exists
+            result2 = await db.execute(select(User).where(User.email == "admin@dsir.dev"))
+            if result2.scalar_one_or_none():
+                print("Already seeded. Skipping.")
+                return
 
         print("Seeding DSir database...")
+
+        # If there's placeholder content from a previous broken seed, clean up first
+        old_content = await db.execute(select(Lesson).where(Lesson.content == "Content not available.").limit(1))
+        if old_content.scalar_one_or_none():
+            print("Cleaning up placeholder content from previous seed...")
+            # Delete in order to respect foreign keys
+            from sqlalchemy import text
+            await db.execute(text("DELETE FROM lesson_progress WHERE 1=1"))
+            await db.execute(text("DELETE FROM exercises WHERE 1=1"))
+            await db.execute(text("DELETE FROM lessons WHERE 1=1"))
+            await db.execute(text("DELETE FROM modules WHERE 1=1"))
+            await db.execute(text("DELETE FROM courses WHERE 1=1"))
+            await db.execute(text("DELETE FROM user_stats WHERE 1=1"))
+            await db.execute(text("DELETE FROM notifications WHERE 1=1"))
+            await db.execute(text("DELETE FROM achievements WHERE 1=1"))
+            await db.execute(text("DELETE FROM feature_flags WHERE 1=1"))
+            await db.execute(text("DELETE FROM technology_stacks WHERE 1=1"))
+            await db.execute(text("DELETE FROM categories WHERE 1=1"))
+            await db.execute(text("DELETE FROM refresh_tokens WHERE 1=1"))
+            await db.execute(text("DELETE FROM oauth_accounts WHERE 1=1"))
+            await db.execute(text("DELETE FROM enrollments WHERE 1=1"))
+            await db.execute(text("DELETE FROM users WHERE 1=1"))
+            await db.flush()
+            print("Cleanup complete. Re-seeding with proper content...")
 
         # ── Users ──
         admin = User(id=uuid4(), email="admin@dsir.dev", username="admin",

@@ -30,7 +30,6 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
       "Content-Type": "application/json",
       ...headers,
     },
-    credentials: "include",
   };
 
   if (auth && typeof window !== "undefined") {

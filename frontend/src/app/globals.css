@@ -23,17 +23,18 @@
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 
-  /* Smooth transitions for dark mode */
-  * {
-    transition-property: background-color, border-color, color;
-    transition-duration: 200ms;
-    transition-timing-function: ease-out;
+  /* Select styling */
+  select {
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    padding-right: 2.25rem;
   }
 
-  /* Exclude transitions from performance-critical elements */
-  .no-transition,
-  .no-transition * {
-    transition: none !important;
+  .dark select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%238b8fa3' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
   }
 
   /* Scrollbar */
@@ -41,129 +42,38 @@
     width: 6px;
     height: 6px;
   }
-
-  ::-webkit-scrollbar-track {
-    background: transparent;
-  }
-
-  ::-webkit-scrollbar-thumb {
-    background: #d1d5db;
-    border-radius: 9999px;
-  }
-
-  .dark ::-webkit-scrollbar-thumb {
-    background: #374151;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    background: #9ca3af;
-  }
-
-  .dark ::-webkit-scrollbar-thumb:hover {
-    background: #4b5563;
-  }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 9999px; }
+  .dark ::-webkit-scrollbar-thumb { background: #374151; }
+  ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+  .dark ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
 }
 
 @layer components {
-  /* Prose for lesson content */
-  .prose-lesson {
-    @apply leading-relaxed;
-  }
+  .prose-lesson h1 { @apply text-2xl font-bold text-[#1a1d2e] dark:text-white mt-12 mb-6 tracking-tight; }
+  .prose-lesson h2 { @apply text-xl font-bold text-[#1a1d2e] dark:text-white mt-10 mb-4 tracking-tight; }
+  .prose-lesson h3 { @apply text-lg font-semibold text-[#1a1d2e] dark:text-white mt-8 mb-3; }
+  .prose-lesson h4 { @apply text-base font-semibold text-[#1a1d2e] dark:text-white mt-6 mb-2; }
+  .prose-lesson p { @apply mb-4 leading-7 text-[#4b5563] dark:text-[#a0a5b8]; }
+  .prose-lesson ul, .prose-lesson ol { @apply mb-4 pl-6; }
+  .prose-lesson li { @apply mb-1 text-[#4b5563] dark:text-[#a0a5b8] list-disc; }
+  .prose-lesson ol li { @apply list-decimal; }
+  .prose-lesson code { @apply bg-[#f1f3f5] dark:bg-white/5 text-brand-700 dark:text-brand-400 px-1.5 py-0.5 rounded-md text-sm font-mono; }
+  .prose-lesson pre { @apply bg-[#f8f9fa] dark:bg-[#0d0d13] p-5 rounded-2xl overflow-x-auto mb-6 border border-[#e8ecf1] dark:border-white/5; }
+  .prose-lesson pre code { @apply bg-transparent text-inherit p-0 text-sm leading-relaxed; }
+  .prose-lesson blockquote { @apply border-l-4 border-brand-400 dark:border-brand-600 pl-4 py-1.5 mb-4 text-[#6b7280] dark:text-[#8b8fa3] italic bg-brand-50/50 dark:bg-brand-500/5 rounded-r-lg; }
+  .prose-lesson a { @apply text-brand-600 dark:text-brand-400 hover:underline font-medium; }
+  .prose-lesson strong { @apply font-semibold text-[#1a1d2e] dark:text-white; }
+  .prose-lesson hr { @apply my-8 border-[#e8ecf1] dark:border-white/5; }
+  .prose-lesson table { @apply w-full mb-4 border-collapse; }
+  .prose-lesson th { @apply text-left font-semibold p-3 border-b-2 border-[#e8ecf1] dark:border-white/10 bg-[#f8f9fa] dark:bg-white/5; }
+  .prose-lesson td { @apply p-3 border-b border-[#e8ecf1] dark:border-white/5; }
 
-  .prose-lesson h1 {
-    @apply text-2xl font-bold text-[#1a1d2e] dark:text-white mt-12 mb-6 tracking-tight;
-  }
-
-  .prose-lesson h2 {
-    @apply text-xl font-bold text-[#1a1d2e] dark:text-white mt-10 mb-4 tracking-tight;
-  }
-
-  .prose-lesson h3 {
-    @apply text-lg font-semibold text-[#1a1d2e] dark:text-white mt-8 mb-3;
-  }
-
-  .prose-lesson h4 {
-    @apply text-base font-semibold text-[#1a1d2e] dark:text-white mt-6 mb-2;
-  }
-
-  .prose-lesson p {
-    @apply mb-4 leading-7 text-[#4b5563] dark:text-[#a0a5b8];
-  }
-
-  .prose-lesson ul,
-  .prose-lesson ol {
-    @apply mb-4 pl-6;
-  }
-
-  .prose-lesson li {
-    @apply mb-1 text-[#4b5563] dark:text-[#a0a5b8];
-  }
-
-  .prose-lesson ul li {
-    @apply list-disc;
-  }
-
-  .prose-lesson ol li {
-    @apply list-decimal;
-  }
-
-  .prose-lesson code {
-    @apply bg-[#f1f3f5] dark:bg-white/5 text-brand-700 dark:text-brand-400 px-1.5 py-0.5 rounded-md text-sm font-mono;
-  }
-
-  .prose-lesson pre {
-    @apply bg-[#f8f9fa] dark:bg-[#0d0d13] p-5 rounded-2xl overflow-x-auto mb-6 border border-[#e8ecf1] dark:border-white/5;
-  }
-
-  .prose-lesson pre code {
-    @apply bg-transparent text-inherit p-0 text-sm leading-relaxed;
-  }
-
-  .prose-lesson blockquote {
-    @apply border-l-4 border-brand-400 dark:border-brand-600 pl-4 py-1.5 mb-4 text-[#6b7280] dark:text-[#8b8fa3] italic bg-brand-50/50 dark:bg-brand-500/5 rounded-r-lg;
-  }
-
-  .prose-lesson a {
-    @apply text-brand-600 dark:text-brand-400 hover:underline font-medium;
-  }
-
-  .prose-lesson strong {
-    @apply font-semibold text-[#1a1d2e] dark:text-white;
-  }
-
-  .prose-lesson hr {
-    @apply my-8 border-[#e8ecf1] dark:border-white/5;
-  }
-
-  .prose-lesson table {
-    @apply w-full mb-4 border-collapse;
-  }
-
-  .prose-lesson th {
-    @apply text-left font-semibold p-3 border-b-2 border-[#e8ecf1] dark:border-white/10 bg-[#f8f9fa] dark:bg-white/5;
-  }
-
-  .prose-lesson td {
-    @apply p-3 border-b border-[#e8ecf1] dark:border-white/5;
-  }
-
-  /* Scrollbar thin utility */
-  .scrollbar-thin {
-    scrollbar-width: thin;
-    scrollbar-color: #d1d5db transparent;
-  }
-
-  .dark .scrollbar-thin {
-    scrollbar-color: #374151 transparent;
-  }
-
-  .scrollbar-thin::-webkit-scrollbar {
-    width: 5px;
-  }
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #d1d5db transparent; }
+  .dark .scrollbar-thin { scrollbar-color: #374151 transparent; }
+  .scrollbar-thin::-webkit-scrollbar { width: 5px; }
 }
 
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+  .text-balance { text-wrap: balance; }
 }
