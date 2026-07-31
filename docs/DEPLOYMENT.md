@@ -11,17 +11,19 @@
 
 1. **Create a PostgreSQL database on Render**
    - Go to Render Dashboard → New → PostgreSQL
-   - Note the Internal Database URL and External Database URL
+   - Note the Internal Database URL
 
 2. **Create a Web Service**
    - Connect your GitHub repository
    - Set Root Directory to `backend`
-   - Build Command: `pip install -r requirements.txt`
+   - Build Command: `pip install --upgrade pip && pip install -r requirements.txt`
    - Start Command: `gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120`
+   - **Important**: Set `PYTHON_VERSION=3.12` in environment variables (Render defaults to 3.14 which has wheel issues)
 
 3. **Set Environment Variables**
    ```
-   DATABASE_URL=postgresql+asyncpg://...  (from Render PostgreSQL)
+   PYTHON_VERSION=3.12
+   DATABASE_URL=postgresql+psycopg://...  (from Render PostgreSQL — auto-converts postgres:// prefix)
    JWT_SECRET_KEY=<generate a strong random string>
    CORS_ORIGINS=["https://your-frontend.vercel.app"]
    OPENAI_API_KEY=sk-...                    (optional)
@@ -32,12 +34,17 @@
 4. **Run Database Seed**
    - After first deploy, use Render Shell:
    ```bash
-   python -m app.seed
+   cd backend && python -m app.seed
    ```
 
 ### Health Checks
 - Liveness: `GET https://your-backend.onrender.com/api/health`
 - Readiness: `GET https://your-backend.onrender.com/api/health/ready`
+
+### Tech Stack Notes
+- **psycopg** replaces asyncpg — ships pre-built wheels for all Python versions (no Rust/Cython compilation needed)
+- Database URL auto-converted: `postgres://...` → `postgresql+psycopg://...`
+- Python 3.12 recommended — tested compatibility with all dependencies
 
 ---
 
@@ -87,8 +94,9 @@ npm run dev
 ### Backend
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `DATABASE_URL` | Yes | — | PostgreSQL connection string (asyncpg) |
+| `DATABASE_URL` | Yes | — | PostgreSQL connection string (psycopg driver) |
 | `JWT_SECRET_KEY` | Yes | — | Secret key for JWT signing |
+| `PYTHON_VERSION` | Yes | — | Set to `3.12` for Render |
 | `REDIS_URL` | No | — | Redis connection string |
 | `OPENAI_API_KEY` | No | — | OpenAI API key for AI features |
 | `ANTHROPIC_API_KEY` | No | — | Anthropic API key for AI features |
@@ -106,6 +114,7 @@ npm run dev
 ## Production Checklist
 
 - [ ] Generate strong `JWT_SECRET_KEY` (min 32 chars, random)
+- [ ] Set `PYTHON_VERSION=3.12` on Render
 - [ ] Set `DEBUG=false`
 - [ ] Configure CORS origins to your actual frontend domain
 - [ ] Set up SSL/TLS (Render/Vercel handle this automatically)
