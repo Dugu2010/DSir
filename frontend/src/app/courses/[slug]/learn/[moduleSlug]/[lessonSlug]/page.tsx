@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { AppShell } from '@/components/layout/AppShell';
 import { Card, Badge, Button, CodeBlock } from '@/components/ui';
+import Sandbox from '@/components/Sandbox';
 import { api } from '@/lib/api';
 import {
   BookOpen, Clock, ChevronLeft, ChevronRight, CheckCircle,
@@ -143,6 +144,18 @@ export default function LessonPage() {
 
             {/* Main content */}
             {renderContent(lesson.content)}
+
+            {/* Code Playground */}
+            <div className="mt-12 pt-8 border-t border-border">
+              <div className="flex items-center gap-2 mb-4">
+                <Play className="h-5 w-5 text-emerald-500" />
+                <h2 className="text-lg font-bold text-ink">Try it Yourself</h2>
+              </div>
+              <p className="text-sm text-ink-secondary mb-4">
+                Experiment with what you learned. The code runs in your browser — no server needed.
+              </p>
+              <Sandbox language="python" initialCode="# Try what you just learned!\nprint('Hello, DSir!')\n" height="250px" />
+            </div>
 
             {/* Complete button */}
             <div className="mt-12 pt-8 border-t border-border">

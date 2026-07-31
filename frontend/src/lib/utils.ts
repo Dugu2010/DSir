@@ -49,3 +49,12 @@ export function levelProgress(xp: number, level: number): number {
   const needed = nextLevelXp - currentLevelXp;
   return Math.min((levelXp / needed) * 100, 100);
 }
+
+export const exerciseTypeLabel: Record<string, string> = {
+  output_prediction: "Output Prediction",
+  debugging: "Debugging",
+  code_completion: "Code Completion",
+  bug_fixing: "Bug Fixing",
+  refactoring: "Refactoring",
+  optimization: "Optimization",
+}
