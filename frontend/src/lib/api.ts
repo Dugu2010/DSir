@@ -215,3 +215,13 @@ export const admin = {
 };
 
 export { ApiError };
+
+// ── Generic API client (used by auth-store and learn/practice pages) ──
+
+export const api = {
+  get: <T>(endpoint: string) => request<T>(endpoint),
+  post: <T>(endpoint: string, body?: unknown) => request<T>(endpoint, { method: "POST", body }),
+  put: <T>(endpoint: string, body?: unknown) => request<T>(endpoint, { method: "PUT", body }),
+  patch: <T>(endpoint: string, body?: unknown) => request<T>(endpoint, { method: "PATCH", body }),
+  delete: <T>(endpoint: string) => request<T>(endpoint, { method: "DELETE" }),
+};
