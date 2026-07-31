@@ -22,16 +22,16 @@ export function CodeBlock({
 }: CodeBlockProps) {
   const [copied, setCopied] = useState(false);
   const [showSandbox, setShowSandbox] = useState(false);
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(code);
     setCopied(true);
-    clearTimeout(timeoutRef.current);
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => setCopied(false), 2000);
   }, [code]);
 
-  useEffect(() => () => clearTimeout(timeoutRef.current), []);
+  useEffect(() => () => { if (timeoutRef.current) clearTimeout(timeoutRef.current); }, []);
 
   const lines = code.split("\n");
   const lang = (language || "python").toLowerCase();
