@@ -21,9 +21,18 @@ function loadPyodide(): Promise<any> {
   if (pyodidePromise) return pyodidePromise;
   pyodidePromise = (async () => {
     if (typeof window === "undefined") return null;
+    // Load pyodide via script tag to avoid webpack build-time resolution
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js";
+    document.head.appendChild(script);
+    await new Promise((resolve, reject) => {
+      script.onload = resolve;
+      script.onerror = reject;
+    });
     // @ts-ignore
-    const pyodide = await import("https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js");
-    await pyodide.loadPyodide({ indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/" });
+    const pyodide = await (window as any).loadPyodide({
+      indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/",
+    });
     return pyodide;
   })();
   return pyodidePromise;
