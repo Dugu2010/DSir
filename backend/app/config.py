@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_AUTH_WINDOW: int = 60
 
     # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "https://dsir.vercel.app"]
+    CORS_ORIGINS: list[str] = ["http://localhost:3000", "https://dsir-umber.vercel.app", "https://dsir.vercel.app"]
 
     # Logging
     LOG_LEVEL: str = "INFO"
