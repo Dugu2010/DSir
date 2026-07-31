@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     PORT: int = 8000
     WORKERS: int = 4
 
-    # Database
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/dsir"
+    # Database - Render provides postgres:// which we convert to postgresql+psycopg://
+    DATABASE_URL: str = "postgresql+psycopg://postgres:postgres@localhost:5432/dsir"
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
     DATABASE_POOL_RECYCLE: int = 3600
