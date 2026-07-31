@@ -104,7 +104,56 @@ _LC = {
 # Content lookup helper
 def _lc(course, module_slug, lesson_slug):
     """Look up lesson content from embedded data."""
-    return _LC.get(course, {}).get(module_slug, {}).get(lesson_slug, "Content not available.")
+    cached = _LC.get(course, {}).get(module_slug, {}).get(lesson_slug)
+    if cached and cached != "Content not available.":
+        return cached
+    # Generate rich default content for lessons without explicit content
+    title = lesson_slug.replace("-", " ").replace("_", " ").title()
+    mod_title = module_slug.replace("-", " ").replace("_", " ").title()
+    return f'''# {title}
+
+Welcome to the **{title}** lesson in the {mod_title} module!
+
+## Overview
+
+This lesson covers essential concepts that will build your programming foundation. Take your time to understand each section thoroughly.
+
+## Key Concepts
+
+- Understanding the core principles
+- Writing clean, effective code
+- Applying concepts through practice
+- Debugging common issues
+
+## Getting Started
+
+```python
+# Let's begin exploring!
+print("Learning {title}")\n\n# Try experimenting with the concepts below\nname = "Learner"\nprint(f"Welcome, {{name}}! Let's master this topic.")\n```
+
+## Hands-On Practice
+
+1. **Experiment** — Modify the code above and observe results
+2. **Apply** — Try using these concepts in new scenarios
+3. **Build** — Create something small using what you've learned
+
+## Tips for Success
+
+> 💡 **Pro Tip:** Don't just read — type out every example yourself. Muscle memory is key to programming fluency.
+
+> 🔍 **Debug Mindset:** When something doesn't work, read the error message carefully. It usually tells you exactly what's wrong.
+
+## What's Next?
+
+After mastering this lesson, you'll be ready to tackle more advanced topics. Each lesson builds on the previous ones, so make sure you're comfortable before moving on.
+
+## Quick Reference
+
+```python
+# Common patterns you'll use\n# Variables\nx = 10\nname = "value"\n\n# Functions\ndef my_function(param):\n    return param * 2\n\n# Loops\nfor i in range(5):\n    print(i)\n```
+
+Happy coding! 🚀
+'''
 
 
 async def seed():
