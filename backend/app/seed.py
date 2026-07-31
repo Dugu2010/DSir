@@ -328,6 +328,8 @@ async def seed():
         print("  Demo  → demo@dsir.dev  / Demo@123!")
         print(f"  3 courses, {sum(len(md) for md in modules_data)} modules, 26 lessons created")
 
+        await db.commit()
+
 
 if __name__ == "__main__":
     asyncio.run(seed())
