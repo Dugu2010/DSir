@@ -112,7 +112,8 @@ async def seed():
         await conn.run_sync(Base.metadata.create_all)
 
     async with async_session_factory() as db:
-        result = await db.execute(select(User).limit(1))
+        # Check if seed already ran by looking for the admin user
+        result = await db.execute(select(User).where(User.email == "admin@dsir.dev"))
         if result.scalar_one_or_none():
             print("Already seeded. Skipping.")
             return
