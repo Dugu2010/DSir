@@ -557,6 +557,16 @@ class NotificationResponse(BaseModel):
 
 # ── Admin ───────────────────────────────────────────────────────
 
+class FeatureFlag(BaseModel):
+    name: str
+    description: Optional[str] = None
+    is_enabled: bool = False
+    rules: Optional[dict] = None
+
+    class Config:
+        from_attributes = True
+
+
 class AdminDashboardStats(BaseModel):
     total_users: int
     total_courses: int
