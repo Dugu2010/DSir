@@ -37,7 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (isAuthPage) return <>{children}</>;
 
   return (
-    <div className="min-h-screen bg-surface-secondary dark:bg-[#0a0a0b]">
+    <div className="min-h-screen bg-surface-secondary dark:bg-neutral-950">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -49,7 +49,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed top-0 left-0 z-50 h-full w-64 bg-surface dark:bg-[#111113] border-r border-border",
+          "fixed top-0 left-0 z-50 h-full w-64 bg-surface dark:bg-neutral-950 border-r border-border",
           "transform transition-transform duration-200 ease-in-out",
           "lg:translate-x-0",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
@@ -139,7 +139,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="lg:pl-64">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 h-16 bg-surface/80 dark:bg-[#111113]/80 backdrop-blur-xl border-b border-border flex items-center justify-between px-4 lg:px-8">
+        <header className="sticky top-0 z-30 h-16 bg-surface/80 dark:bg-neutral-950/80 backdrop-blur-xl border-b border-border flex items-center justify-between px-4 lg:px-8">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 rounded-lg hover:bg-surface-secondary"
