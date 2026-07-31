@@ -1,10 +1,1 @@
-.nexus/
-node_modules/
-.env
-__pycache__/
-*.pyc
-.venv/
-.next/
-.DS_Store
-.env.local
-.github/workflows/ci.yml
+.nexus/\nnode_modules/\n.env\n__pycache__/\n*.pyc\n.venv/\n.next/\n.DS_Store\n.env.local
