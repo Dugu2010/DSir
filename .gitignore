@@ -7,3 +7,4 @@ __pycache__/
 .next/
 .DS_Store
 .env.local
+.github/workflows/ci.yml
