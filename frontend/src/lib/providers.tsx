@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster } from 'react-hot-toast';
-import { useEffect, useState } from 'react';
-import { useAuthStore } from '@/lib/auth-store';
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "react-hot-toast";
+import { useEffect, useState } from "react";
+import { useAuthStore } from "@/lib/auth-store";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -21,9 +21,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     initialize().finally(() => setReady(true));
-    const handler = () => { window.location.href = '/login'; };
-    window.addEventListener('auth:logout', handler);
-    return () => window.removeEventListener('auth:logout', handler);
+    const handler = () => { window.location.href = "/login"; };
+    window.addEventListener("auth:logout", handler);
+    return () => window.removeEventListener("auth:logout", handler);
   }, [initialize]);
 
   return (
@@ -38,9 +38,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
         toastOptions={{
           duration: 4000,
           style: {
-            borderRadius: '12px',
-            padding: '12px 16px',
-            fontSize: '14px',
+            borderRadius: "12px",
+            padding: "12px 16px",
+            fontSize: "14px",
           },
         }}
       />
