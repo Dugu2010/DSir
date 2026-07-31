@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: dsir-api
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dsir-db
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        value: '["https://dsir.vercel.app","https://dsir-git-main.vercel.app"]'
+
+databases:
+  - name: dsir-db
+    plan: free

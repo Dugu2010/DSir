@@ -1,0 +1,34 @@
+services:
+  - type: web
+    name: dsir-api
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: dsir-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: dsir-redis
+          type: redis
+          property: connectionString
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: CORS_ORIGINS
+        value: '["https://dsir.vercel.app","http://localhost:3000"]'
+      - key: ENVIRONMENT
+        value: production
+
+databases:
+  - name: dsir-db
+    databaseName: dsir
+    user: dsir_user
+    plan: starter
+
+  - name: dsir-redis
+    ipAllowList: []
+    plan: starter
