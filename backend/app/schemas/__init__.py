@@ -583,6 +583,29 @@ class SearchResult(BaseModel):
     lessons: list[LessonListItem] = []
 
 
+# ── Admin AI ────────────────────────────────────────────────────
+
+class AICourseGenerateRequest(BaseModel):
+    topic: str = Field(default="", description="Topic hint for course generation")
+
+
+class AICourseGenerateResponse(BaseModel):
+    course_data: dict
+    preview: str
+
+
+class AICourseImportRequest(BaseModel):
+    course_data: dict
+
+
+class AICourseImportResponse(BaseModel):
+    course_id: UUID
+    course_slug: str
+    module_count: int
+    lesson_count: int
+    exercise_count: int
+
+
 # ── Rebuild forward refs ────────────────────────────────────────
 
 QuestionResponse.model_rebuild()

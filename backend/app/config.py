@@ -40,8 +40,9 @@ class Settings(BaseSettings):
     # AI Providers
     OPENAI_API_KEY: Optional[str] = None
     ANTHROPIC_API_KEY: Optional[str] = None
-    AI_DEFAULT_PROVIDER: str = "openai"
-    AI_DEFAULT_MODEL: str = "gpt-4o-mini"
+    GEMINI_API_KEY: Optional[str] = None
+    AI_DEFAULT_PROVIDER: str = "gemini"
+    AI_DEFAULT_MODEL: str = "gemini-2.0-flash"
 
     # Sandbox
     SANDBOX_DOCKER_IMAGE: str = "dsir-sandbox:latest"
