@@ -79,52 +79,50 @@ def _ocr_with_gemini(data: bytes, ext: str) -> str:
 
 # ── AI Content Structuring ────────────────────────────────────
 
-STRUCTURE_PROMPT = """You are an expert curriculum designer and educational content creator for a programming education platform called DSir.
+STRUCTURE_PROMPT = """You are an expert curriculum designer. Output ONLY valid JSON — no explanations, no markdown outside the JSON.
 
-I will give you raw educational content extracted from a handbook, textbook, or notes. Your job is to structure it into a complete course.
-
-Output MUST be valid JSON with this exact structure:
+I will give you educational content. Structure it into this JSON:
 
 ```json
 {
   "course": {
-    "title": "Course Title — Catchy & Professional",
-    "slug": "course-slug-with-hyphens",
-    "description": "2-3 sentence compelling description",
-    "long_description": "Detailed paragraph about what students will learn",
-    "difficulty": "beginner|intermediate|advanced|expert",
+    "title": "Course Title",
+    "slug": "course-slug",
+    "description": "2-sentence description",
+    "long_description": "Detailed paragraph",
+    "difficulty": "beginner|intermediate|advanced",
     "estimated_duration_minutes": 1200,
-    "skill_tags": ["tag1", "tag2", "tag3"],
-    "learning_objectives": ["objective 1", "objective 2", "objective 3"]
+    "skill_tags": ["tag1", "tag2"],
+    "learning_objectives": ["obj1", "obj2"]
   },
   "modules": [
     {
-      "title": "01. Module Title",
+      "title": "Module Title",
       "slug": "module-slug",
-      "description": "Brief module description",
+      "description": "Brief description",
       "display_order": 1,
       "lessons": [
         {
           "title": "Lesson Title",
           "slug": "lesson-slug",
-          "description": "What this lesson covers in one line",
-          "difficulty": "beginner|intermediate|advanced",
-          "estimated_duration_minutes": 45,
+          "description": "One line summary",
+          "difficulty": "beginner",
+          "estimated_duration_minutes": 30,
           "skill_tags": ["tag"],
-          "learning_objectives": ["objective"],
-          "content_markdown": "Full lesson content in markdown with ## headers, ```python code blocks, bullet points, etc.",
+          "learning_objectives": ["obj"],
+          "content_markdown": "## Section\\n\\nFull markdown content with ```python code blocks```",
           "exercises": [
             {
-              "title": "Practice: Topic",
-              "description": "Test understanding of X",
-              "instructions": "Complete the challenge",
-              "exercise_type": "code_completion|debugging|bug_fixing|output_prediction|refactoring|optimization",
-              "difficulty": "easy|medium|hard",
-              "starter_code": "# starter code\\n",
-              "solution_code": "# solution\\n",
-              "test_code": "assert True\\n",
-              "hints": [{"level": 1, "content": "Hint text"}],
-              "points": 15
+              "title": "Practice: Name",
+              "description": "Test X",
+              "instructions": "Complete the task",
+              "exercise_type": "code_completion",
+              "difficulty": "easy",
+              "starter_code": "# starter",
+              "solution_code": "# solution",
+              "test_code": "assert True",
+              "hints": [{"level": 1, "content": "Hint"}],
+              "points": 10
             }
           ]
         }
@@ -135,19 +133,13 @@ Output MUST be valid JSON with this exact structure:
 ```
 
 RULES:
-1. Create 4-8 modules that flow logically from basics to advanced.
-2. Each module should have 2-4 lessons.
-3. Every lesson MUST have content_markdown — at least 500 words of real educational content with code examples in ```python blocks.
-4. Every lesson MUST have at least 1 exercise.
-5. Use proper markdown: ## headers, ```python code blocks, bullet lists, **bold**, *italic*.
-6. Make the content pedagogically sound — explain concepts, show examples, provide practice.
-7. For code-heavy topics, include runnable examples with print() statements.
-8. The JSON must be valid and complete — no truncation, no ellipsis.
-9. Slug values: lowercase, hyphen-separated, no special chars.
+- Output ONLY the JSON. No other text.
+- 3-5 modules, 2-3 lessons per module, 1-2 exercises per lesson.
+- Every content_markdown: 200+ words with at least 1 ```python code block.
+- Slugs: lowercase-with-hyphens.
+- Valid JSON only. No trailing commas.
 
-Here is the raw content to structure:
-
-{content}"""
+Content:\n{content}"""
 
 
 def generate_course_structure(raw_content: str, course_hint: str = "") -> dict:
@@ -155,42 +147,81 @@ def generate_course_structure(raw_content: str, course_hint: str = "") -> dict:
     genai = _get_gemini()
     model = genai.GenerativeModel(
         "gemini-2.0-flash",
-        generation_config={"temperature": 0.3, "max_output_tokens": 8192},
+        generation_config={"temperature": 0.3, "max_output_tokens": 16384},
     )
 
-    prompt = STRUCTURE_PROMPT.format(content=raw_content[:30000])
+    prompt = STRUCTURE_PROMPT.format(content=raw_content[:25000])
     if course_hint:
         prompt += f"\n\nAdditional context: This content is about {course_hint}."
 
     logger.info("ai_content.generate_course_structure.start", content_len=len(raw_content))
     resp = model.generate_content(prompt)
-    text = resp.text or ""
+    text = (resp.text or "").strip()
 
-    return _parse_json_response(text)
+    try:
+        return _parse_json_response(text)
+    except ValueError:
+        logger.error("ai_content.parse_json.failed", raw_response=text[:2000])
+        raise
 
 
 def _parse_json_response(text: str) -> dict:
-    """Extract and parse JSON from LLM response, handling markdown fences."""
-    # Try to extract from ```json ... ``` fences
-    m = re.search(r'```(?:json)?\s*([\s\S]*?)```', text)
-    if m:
-        text = m.group(1)
+    """Extract and parse JSON from LLM response, handling many edge cases."""
+    if not text or not text.strip():
+        raise ValueError("AI returned empty response")
 
-    # Try direct parse
+    # Log first 200 chars for debugging
+    logger.info("ai_content.parse_json.start", preview=text[:200])
+
+    # Strategy 1: Direct parse
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
 
-    # Try finding { ... } block
-    m = re.search(r'\{[\s\S]*\}', text)
+    # Strategy 2: Extract from ```json ... ``` fence
+    m = re.search(r'```(?:json)?\s*\n?([\s\S]*?)\n?```', text)
     if m:
         try:
-            return json.loads(m.group(0))
+            return json.loads(m.group(1).strip())
         except json.JSONDecodeError:
             pass
 
-    raise ValueError(f"Failed to parse AI response as JSON. Response preview: {text[:500]}")
+    # Strategy 3: Find outermost balanced {} pair
+    depth = 0
+    start = -1
+    for i, ch in enumerate(text):
+        if ch == '{':
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0 and start >= 0:
+                try:
+                    return json.loads(text[start:i+1])
+                except json.JSONDecodeError:
+                    continue
+    if start < 0:
+        raise ValueError(f"AI response contained no JSON object. Preview: {text[:500]}")
+
+    # Strategy 4: Find any { ... } via regex (non-greedy)
+    for m in re.finditer(r'\{[^{}]*\{[\s\S]*?\}[^{}]*\}', text):
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            continue
+
+    # Strategy 5: Split on common delimiters and try each block
+    for block in re.split(r'\n\n|```|\\n\\n', text):
+        block = block.strip()
+        if block.startswith('{'):
+            try:
+                return json.loads(block)
+            except json.JSONDecodeError:
+                continue
+
+    raise ValueError(f"Failed to parse AI response as JSON. Raw preview: {text[:500]}")
 
 
 def generate_lesson_content(topic: str, context: str = "") -> str:
