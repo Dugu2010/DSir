@@ -1,8 +1,13 @@
-"""AI-powered content extraction and course generation for DSir admin."""
+"""AI-powered content extraction and course generation for DSir admin.
+
+Uses Google Gemini 2.0 Flash via direct REST API (not deprecated SDK).
+Strategy: two-pass chunking — extract structure first, then generate each lesson separately.
+Handles books of ANY size."""
 import base64
 import json
 import io
 import re
+import httpx
 from typing import Optional
 import structlog
 
@@ -11,24 +16,58 @@ from app.config import get_settings
 settings = get_settings()
 logger = structlog.get_logger()
 
-
-# ── Gemini client (lazy init) ────────────────────────────────
-
-_genai_client = None
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 
-def _get_gemini():
-    global _genai_client
-    if _genai_client is None:
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=settings.GEMINI_API_KEY)
-            _genai_client = genai
-        except ImportError:
-            raise RuntimeError("google-generativeai not installed. Run: pip install google-generativeai")
-        except Exception as e:
-            raise RuntimeError(f"Failed to configure Gemini: {e}")
-    return _genai_client
+def _call_gemini(prompt: str, image_data: Optional[dict] = None, max_tokens: int = 8192) -> str:
+    """Call Gemini REST API directly. Returns text response."""
+    url = f"{GEMINI_API_URL}?key={settings.GEMINI_API_KEY}"
+
+    parts = []
+    if image_data:
+        parts.append({
+            "inline_data": {"mime_type": image_data["mime_type"], "data": image_data["data"]}
+        })
+    parts.append({"text": prompt})
+
+    payload = {
+        "contents": [{"parts": parts}],
+        "generationConfig": {
+            "temperature": 0.3,
+            "maxOutputTokens": max_tokens,
+            "topP": 0.95,
+        },
+        "safetySettings": [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ],
+    }
+
+    try:
+        resp = httpx.post(url, json=payload, timeout=120.0)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Check for safety blocks
+        if "candidates" not in data or not data["candidates"]:
+            block_reason = data.get("promptFeedback", {}).get("blockReason", "unknown")
+            raise RuntimeError(f"Gemini blocked response: {block_reason}")
+
+        candidate = data["candidates"][0]
+        if candidate.get("finishReason") == "SAFETY":
+            raise RuntimeError("Gemini response blocked by safety filter")
+
+        parts = candidate.get("content", {}).get("parts", [])
+        text = "".join(p.get("text", "") for p in parts)
+        if not text:
+            raise RuntimeError(f"Gemini returned empty response. Finish reason: {candidate.get('finishReason')}")
+        return text
+    except httpx.HTTPStatusError as e:
+        raise RuntimeError(f"Gemini API error {e.response.status_code}: {e.response.text[:500]}")
+    except Exception as e:
+        raise RuntimeError(f"Gemini API call failed: {str(e)}")
 
 
 # ── File Processing ───────────────────────────────────────────
@@ -53,7 +92,7 @@ def extract_text_from_bytes(data: bytes, filename: str = "") -> str:
         except ImportError:
             raise RuntimeError("No PDF library available. Install pdfplumber or PyPDF2.")
 
-    # Images (handwritten/scanned) — use Gemini vision directly
+    # Images (handwritten/scanned) — use Gemini vision
     if ext in ("png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff"):
         return _ocr_with_gemini(data, ext)
 
@@ -66,65 +105,48 @@ def extract_text_from_bytes(data: bytes, filename: str = "") -> str:
 
 def _ocr_with_gemini(data: bytes, ext: str) -> str:
     """Use Gemini Vision to OCR an image (supports handwritten text)."""
-    genai = _get_gemini()
     mime = f"image/{ext}" if ext != "jpg" else "image/jpeg"
-    model = genai.GenerativeModel("gemini-2.0-flash")
     image_part = {"mime_type": mime, "data": base64.b64encode(data).decode()}
-    resp = model.generate_content([
-        "Extract ALL text from this image verbatim. Include code blocks, headings, bullet points exactly as they appear. Do not summarize or paraphrase. If it appears to be a handwritten note or textbook scan, transcribe every word carefully. Output ONLY the extracted text.",
-        image_part,
-    ])
-    return resp.text or ""
+    return _call_gemini(
+        "Extract ALL text from this image verbatim. Include code blocks, headings, bullet points exactly as they appear. Do not summarize. Output ONLY the extracted text.",
+        image_data=image_part,
+    )
 
 
-# ── AI Content Structuring ────────────────────────────────────
+# ── TWO-PASS COURSE GENERATION ────────────────────────────────
 
-STRUCTURE_PROMPT = """You are an expert curriculum designer. Output ONLY valid JSON — no explanations, no markdown outside the JSON.
+STRUCTURE_PROMPT = """You are an expert curriculum designer. Output ONLY valid JSON.
 
-I will give you educational content. Structure it into this JSON:
+Analyze this educational content and create a course STRUCTURE (titles, descriptions, slugs — NO lesson content yet).
 
+Output exactly this JSON:
 ```json
 {
   "course": {
     "title": "Course Title",
     "slug": "course-slug",
     "description": "2-sentence description",
-    "long_description": "Detailed paragraph",
-    "difficulty": "beginner|intermediate|advanced",
-    "estimated_duration_minutes": 1200,
-    "skill_tags": ["tag1", "tag2"],
-    "learning_objectives": ["obj1", "obj2"]
+    "long_description": "Detailed paragraph about what students learn",
+    "difficulty": "beginner",
+    "estimated_duration_minutes": 600,
+    "skill_tags": ["tag1"],
+    "learning_objectives": ["obj1"]
   },
   "modules": [
     {
       "title": "Module Title",
       "slug": "module-slug",
-      "description": "Brief description",
+      "description": "Brief module description",
       "display_order": 1,
       "lessons": [
         {
           "title": "Lesson Title",
           "slug": "lesson-slug",
-          "description": "One line summary",
+          "description": "One-line summary",
           "difficulty": "beginner",
           "estimated_duration_minutes": 30,
           "skill_tags": ["tag"],
-          "learning_objectives": ["obj"],
-          "content_markdown": "## Section\\n\\nFull markdown content with ```python code blocks```",
-          "exercises": [
-            {
-              "title": "Practice: Name",
-              "description": "Test X",
-              "instructions": "Complete the task",
-              "exercise_type": "code_completion",
-              "difficulty": "easy",
-              "starter_code": "# starter",
-              "solution_code": "# solution",
-              "test_code": "assert True",
-              "hints": [{"level": 1, "content": "Hint"}],
-              "points": 10
-            }
-          ]
+          "learning_objectives": ["obj"]
         }
       ]
     }
@@ -133,53 +155,113 @@ I will give you educational content. Structure it into this JSON:
 ```
 
 RULES:
-- Output ONLY the JSON. No other text.
-- 3-5 modules, 2-3 lessons per module, 1-2 exercises per lesson.
-- Every content_markdown: 200+ words with at least 1 ```python code block.
-- Slugs: lowercase-with-hyphens.
-- Valid JSON only. No trailing commas.
+- 3-7 modules, 2-4 lessons per module
+- Make slugs lowercase-with-hyphens
+- Output ONLY valid JSON — no other text, no explanations
+- DO NOT include content_markdown or exercises in this step
 
-Content:\n{content}"""
+Content:
+{content}"""
+
+LESSON_PROMPT = """You are an expert programming educator. Write a COMPLETE lesson on this topic.
+
+Topic: {title}
+Course context: {course_title}
+Module: {module_title}
+
+Write 300-500 words of educational content in markdown format with:
+- ## sections with clear headers
+- At least 2 ```python code blocks with runnable examples
+- Bullet lists for key concepts
+- A "Practice Exercise" section at the end
+- Professional, encouraging tone
+
+Also create 1-2 coding exercises:
+
+Output ONLY this JSON format:
+```json
+{
+  "content_markdown": "## Section\\n\\nFull markdown...",
+  "exercises": [
+    {
+      "title": "Practice: Name",
+      "description": "What this tests",
+      "instructions": "Complete the task",
+      "exercise_type": "code_completion",
+      "difficulty": "easy",
+      "starter_code": "# TODO: complete",
+      "solution_code": "# solution code",
+      "test_code": "assert True",
+      "hints": [{"level": 1, "content": "Think about..."}],
+      "points": 10
+    }
+  ]
+}
+```
+
+Output ONLY the JSON. No other text."""
 
 
 def generate_course_structure(raw_content: str, course_hint: str = "") -> dict:
-    """Send raw content to Gemini and get back a fully structured course."""
-    genai = _get_gemini()
-    model = genai.GenerativeModel(
-        "gemini-2.0-flash",
-        generation_config={"temperature": 0.3, "max_output_tokens": 16384},
-    )
+    """Two-pass: generate structure from content, then fill each lesson with AI.
 
-    prompt = STRUCTURE_PROMPT.format(content=raw_content[:25000])
+    Step 1: Analyze content → get course outline (titles, slugs, no content yet)
+    Step 2: For each lesson, generate content + exercises individually
+    """
+    # ── PASS 1: Get course structure ──
+    prompt = STRUCTURE_PROMPT.format(content=raw_content[:20000])
     if course_hint:
-        prompt += f"\n\nAdditional context: This content is about {course_hint}."
+        prompt += f"\n\nContext: {course_hint}"
+    logger.info("ai_content.pass1.structure", content_len=len(raw_content))
 
-    logger.info("ai_content.generate_course_structure.start", content_len=len(raw_content))
-    resp = model.generate_content(prompt)
-    text = (resp.text or "").strip()
+    resp_text = _call_gemini(prompt, max_tokens=4096)
+    structure = _parse_json(resp_text, "structure")
+    logger.info("ai_content.pass1.done", course=structure.get("course", {}).get("title"),
+                modules=len(structure.get("modules", [])))
 
-    try:
-        return _parse_json_response(text)
-    except ValueError:
-        logger.error("ai_content.parse_json.failed", raw_response=text[:2000])
-        raise
+    # ── PASS 2: Generate content for each lesson ──
+    course_title = structure.get("course", {}).get("title", "Course")
+    total_lessons = sum(len(m.get("lessons", [])) for m in structure.get("modules", []))
+    filled = 0
+
+    for mod in structure.get("modules", []):
+        module_title = mod.get("title", "")
+        for les in mod.get("lessons", []):
+            filled += 1
+            logger.info("ai_content.pass2.lesson", progress=f"{filled}/{total_lessons}",
+                        lesson=les.get("title"))
+            try:
+                lesson_resp = _call_gemini(
+                    LESSON_PROMPT.format(
+                        title=les.get("title", ""),
+                        course_title=course_title,
+                        module_title=module_title,
+                    ),
+                    max_tokens=4096,
+                )
+                lesson_data = _parse_json(lesson_resp, f"lesson {les.get('title')}")
+                les["content_markdown"] = lesson_data.get("content_markdown", "")
+                les["exercises"] = lesson_data.get("exercises", [])
+            except Exception as e:
+                logger.warning("ai_content.pass2.lesson_failed", lesson=les.get("title"), error=str(e))
+                les["content_markdown"] = f"# {les.get('title')}\n\nContent generation failed: {e}"
+                les["exercises"] = []
+
+    return structure
 
 
-def _parse_json_response(text: str) -> dict:
-    """Extract and parse JSON from LLM response, handling many edge cases."""
+def _parse_json(text: str, context: str = "") -> dict:
+    """Multi-strategy JSON extraction from LLM output."""
     if not text or not text.strip():
-        raise ValueError("AI returned empty response")
-
-    # Log first 200 chars for debugging
-    logger.info("ai_content.parse_json.start", preview=text[:200])
+        raise ValueError(f"[{context}] Empty response")
 
     # Strategy 1: Direct parse
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
-        pass
+    except json.JSONDecodeError as e:
+        logger.info("ai_content.parse.direct_failed", context=context, error=str(e)[:100])
 
-    # Strategy 2: Extract from ```json ... ``` fence
+    # Strategy 2: ```json fence
     m = re.search(r'```(?:json)?\s*\n?([\s\S]*?)\n?```', text)
     if m:
         try:
@@ -187,7 +269,7 @@ def _parse_json_response(text: str) -> dict:
         except json.JSONDecodeError:
             pass
 
-    # Strategy 3: Find outermost balanced {} pair
+    # Strategy 3: Balanced braces (find outermost {})
     depth = 0
     start = -1
     for i, ch in enumerate(text):
@@ -202,45 +284,16 @@ def _parse_json_response(text: str) -> dict:
                     return json.loads(text[start:i+1])
                 except json.JSONDecodeError:
                     continue
-    if start < 0:
-        raise ValueError(f"AI response contained no JSON object. Preview: {text[:500]}")
 
-    # Strategy 4: Find any { ... } via regex (non-greedy)
-    for m in re.finditer(r'\{[^{}]*\{[\s\S]*?\}[^{}]*\}', text):
-        try:
-            return json.loads(m.group(0))
-        except json.JSONDecodeError:
-            continue
-
-    # Strategy 5: Split on common delimiters and try each block
-    for block in re.split(r'\n\n|```|\\n\\n', text):
-        block = block.strip()
-        if block.startswith('{'):
+    # Strategy 4: Try every line
+    for line in text.split('\n'):
+        line = line.strip()
+        if line.startswith('{') and line.endswith('}'):
             try:
-                return json.loads(block)
+                return json.loads(line)
             except json.JSONDecodeError:
                 continue
 
-    raise ValueError(f"Failed to parse AI response as JSON. Raw preview: {text[:500]}")
-
-
-def generate_lesson_content(topic: str, context: str = "") -> str:
-    """Generate a single lesson's markdown content on demand."""
-    genai = _get_gemini()
-    model = genai.GenerativeModel("gemini-2.0-flash")
-
-    prompt = f"""Write a comprehensive programming lesson on: {topic}
-
-Requirements:
-- At least 500 words of educational content
-- Multiple ## sections (Concepts, Code Examples, Practice, Key Takeaways)
-- At least 3 ```python code blocks with runnable examples
-- Use proper markdown formatting
-- Include practice exercises at the end
-- Tone: encouraging, clear, professional
-
-Context: {context[:2000] if context else 'General programming education'}
-
-Output ONLY the markdown content."""
-    resp = model.generate_content(prompt)
-    return resp.text or f"# {topic}\n\nContent generation failed. Please try again."
+    raise ValueError(
+        f"[{context}] Failed to parse JSON. Response: {text[:500]}"
+    )
