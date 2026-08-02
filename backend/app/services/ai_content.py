@@ -80,7 +80,7 @@ def _call_gemini_multimodal(prompt: str, image: dict, max_tokens: int = 4096) ->
 def _call_openai_text(prompt: str, max_tokens: int = 4096) -> str:
     base_url = (settings.AI_OPENAI_BASE_URL or "https://api.openai.com/v1").rstrip("/")
     model = settings.AI_DEFAULT_MODEL or "gpt-4o-mini"
-    body = {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens, "temperature": 0.2}
+    body = {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens, "temperature": 0.2, "chat_template_kwargs": {"enable_thinking": False}}
     for attempt in range(5):
         resp = httpx.post(f"{base_url}/chat/completions", headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}", "Content-Type": "application/json"}, json=body, timeout=180.0)
         if resp.status_code == 200:
