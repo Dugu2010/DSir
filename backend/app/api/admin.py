@@ -26,7 +26,7 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
-# ── Dashboard Stats ─────────────────────────────────────────────
+# ---- Dashboard Stats ----
 
 @router.get("/dashboard", response_model=AdminDashboardStats)
 async def admin_dashboard(
@@ -70,7 +70,7 @@ async def admin_dashboard(
     )
 
 
-# ── User Management ─────────────────────────────────────────────
+# ---- User Management ----
 
 @router.get("/users", response_model=PaginatedResponse)
 async def admin_list_users(
@@ -130,7 +130,7 @@ async def admin_delete_user(
     return {"detail": "User deleted"}
 
 
-# ── Course Management (Admin) ───────────────────────────────────
+# ---- Course Management (Admin) ----
 
 @router.get("/courses", response_model=PaginatedResponse)
 async def admin_list_courses(
@@ -157,7 +157,46 @@ async def admin_list_courses(
     )
 
 
-# ── Feature Flags ───────────────────────────────────────────────
+@router.delete("/courses/{course_id}")
+async def admin_delete_course(
+    course_id: UUID,
+    admin_user: UserModel = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft-delete a course and all its modules, lessons, and exercises."""
+    result = await db.execute(
+        select(Course).where(Course.id == course_id, Course.deleted_at.is_(None))
+    )
+    course = result.scalar_one_or_none()
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    course_title = course.title
+    now = datetime.now(timezone.utc)
+    course.deleted_at = now
+    course.status = ContentStatus.ARCHIVED if hasattr(ContentStatus, 'ARCHIVED') else ContentStatus.DRAFT
+
+    # Soft-delete all modules
+    modules_result = await db.execute(select(Module).where(Module.course_id == course.id))
+    for mod in modules_result.scalars().all():
+        mod.deleted_at = now
+        # Soft-delete lessons in this module
+        lessons_result = await db.execute(select(Lesson).where(Lesson.module_id == mod.id))
+        for les in lessons_result.scalars().all():
+            les.deleted_at = now
+            # Soft-delete exercises
+            ex_result = await db.execute(select(Exercise).where(Exercise.lesson_id == les.id))
+            for ex in ex_result.scalars().all():
+                ex.deleted_at = now
+
+    await db.flush()
+    await db.commit()
+
+    logger.info("admin.course_deleted", course_id=str(course_id), title=course_title)
+    return {"detail": f"Course '{course_title}' and all its content deleted"}
+
+
+# ---- Feature Flags ----
 
 @router.get("/feature-flags")
 async def list_feature_flags(
@@ -183,7 +222,7 @@ async def toggle_feature_flag(
     return {"name": flag.name, "is_enabled": flag.is_enabled}
 
 
-# ── Analytics ───────────────────────────────────────────────────
+# ---- Analytics ----
 
 @router.get("/analytics/overview")
 async def analytics_overview(
@@ -211,10 +250,7 @@ async def analytics_overview(
     return {"daily_signups": list(reversed(signups)), "popular_courses": popular_courses}
 
 
-# ══════════════════════════════════════════════════════════════════
-# AI CONTENT GENERATION
-# Flow: Upload → Extract → Preview → [Admin Approves] → Import
-# ══════════════════════════════════════════════════════════════════
+# ==== AI CONTENT GENERATION ====
 
 @router.post("/ai/preview")
 async def ai_preview(
@@ -222,8 +258,6 @@ async def ai_preview(
     topic: str = Query(default=""),
     admin_user: UserModel = Depends(require_admin),
 ):
-    """Step 1: Upload file → extract text → AI generates course structure preview.
-    Returns structure with module/lesson titles for admin review."""
     from app.services.ai_content import extract_text, generate_structure_preview
 
     data = await file.read()
@@ -236,7 +270,7 @@ async def ai_preview(
     if not raw_text or len(raw_text.strip()) < 50:
         raise HTTPException(
             status_code=400,
-            detail=f"Could not extract enough text from this file. Extracted {len(raw_text)} characters. Try a text-based PDF or image."
+            detail=f"Could not extract enough text. Extracted {len(raw_text)} chars."
         )
     logger.info("ai.preview.extracted", text_len=len(raw_text))
 
@@ -274,17 +308,13 @@ async def ai_import_course(
     admin_user: UserModel = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Step 2: Admin approved the structure → generate lesson content via AI → import into DB.
-
-    Lessons are generated sequentially with a delay to respect free-tier rate limits.
-    """
     from app.services.ai_content import generate_lesson_content
 
     c = structure.get("course", {})
     modules_data = structure.get("modules", [])
 
     if not c or not modules_data:
-        raise HTTPException(status_code=400, detail="Missing course or modules in structure")
+        raise HTTPException(status_code=400, detail="Missing course or modules")
 
     slug = c.get("slug", "ai-course")
     existing = await db.execute(select(Course).where(Course.slug == slug))
@@ -385,7 +415,7 @@ async def ai_import_course(
                 db.add(exercise)
                 total_exercises += 1
 
-            # ── Rate-limit breathing room (3s) for free-tier providers ──
+            # Rate-limit breathing room for free-tier providers
             if total_lessons < total_lesson_count:
                 await asyncio.sleep(3.0)
 
