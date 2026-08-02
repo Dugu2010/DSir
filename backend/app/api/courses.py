@@ -34,7 +34,8 @@ async def list_courses(
     current_user: User = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
-    query = select(Course).where(Course.status == ContentStatus.PUBLISHED, Course.deleted_at.is_(None))
+    # Allow draft courses to be listed (removed ContentStatus.PUBLISHED check)
+    query = select(Course).where(Course.deleted_at.is_(None))
 
     if difficulty:
         try:
@@ -52,64 +53,58 @@ async def list_courses(
         query = query.where(Course.title.ilike(f"%{search}%") | Course.description.ilike(f"%{search}%"))
 
     # Count
-    count_query = select(func.count(Course.id)).where(
-        Course.status == ContentStatus.PUBLISHED, Course.deleted_at.is_(None)
-    )
+    count_query = select(func.count(Course.id)).where(Course.deleted_at.is_(None))
     if difficulty:
         try:
             count_query = count_query.where(Course.difficulty == DifficultyLevel(difficulty))
         except ValueError:
             pass
+    if category:
+        count_query = count_query.join(CourseTechnology).join(TechnologyStack).join(Category).where(Category.slug == category)
+    if technology:
+        count_query = count_query.join(CourseTechnology).join(TechnologyStack).where(TechnologyStack.slug == technology)
+    if search:
+        count_query = count_query.where(Course.title.ilike(f"%{search}%") | Course.description.ilike(f"%{search}%"))
 
-    total = (await db.execute(count_query)).scalar()
+    total = (await db.execute(count_query)).scalar() or 0
 
-    # Sort
-    if sort == "popular":
+    # Sorting
+    if sort == "newest":
+        query = query.order_by(Course.created_at.desc())
+    elif sort == "popular":
         query = query.order_by(Course.enrollment_count.desc())
     elif sort == "rating":
-        query = query.order_by(Course.rating_average.desc())
-    else:
-        query = query.order_by(Course.published_at.desc())
+        query = query.order_by(Course.rating_average.desc().nulls_last())
 
     result = await db.execute(query.offset((page - 1) * size).limit(size))
+    courses = result.scalars().all()
 
     return PaginatedResponse(
-        items=[CourseListItem.model_validate(c) for c in result.scalars().all()],
+        items=[CourseListItem.model_validate(c) for c in courses],
         total=total,
         page=page,
         size=size,
-        pages=(total + size - 1) // size,
+        pages=(total + size - 1) // size if total > 0 else 0,
     )
 
 
-@router.get("/featured", response_model=list[CourseListItem])
-async def get_featured_courses(db: AsyncSession = Depends(get_db)):
+@router.get("/featured", response_model=list[CourseResponse])
+async def list_featured_courses(db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Course)
-        .where(Course.is_featured == True, Course.status == ContentStatus.PUBLISHED, Course.deleted_at.is_(None))
-        .order_by(Course.display_order)
-        .limit(10)
+        .where(Course.is_featured == True, Course.deleted_at.is_(None))
     )
-    return [CourseListItem.model_validate(c) for c in result.scalars().all()]
+    return result.scalars().all()
 
 
 @router.get("/{course_slug}", response_model=CourseResponse)
-async def get_course(
-    course_slug: str,
-    current_user: User = Depends(get_optional_user),
-    db: AsyncSession = Depends(get_db),
-):
+async def get_course_detail(course_slug: str, db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Course).where(Course.slug == course_slug, Course.deleted_at.is_(None))
     )
     course = result.scalar_one_or_none()
     if not course:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
-
-    if course.status != ContentStatus.PUBLISHED:
-        if not current_user or current_user.role.value not in ("teacher", "admin", "superadmin"):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
-
+        raise HTTPException(status_code=404, detail="Course not found")
     return course
 
 
@@ -119,81 +114,78 @@ async def create_course(
     current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
 ):
+    # Check unique slug
     existing = await db.execute(select(Course).where(Course.slug == data.slug))
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Course slug already exists")
+        raise HTTPException(status_code=409, detail="Slug already exists")
 
     course = Course(
-        **data.model_dump(exclude={"category_ids", "technology_ids"}),
+        title=data.title,
+        slug=data.slug,
+        description=data.description,
+        long_description=data.long_description,
+        difficulty=DifficultyLevel(data.difficulty),
+        estimated_duration_minutes=data.estimated_duration_minutes,
+        learning_objectives=data.learning_objectives,
+        skill_tags=data.skill_tags,
+        is_free=data.is_free,
+        is_featured=data.is_featured,
+        status=ContentStatus(data.status or "draft"),
         author_id=current_user.id,
     )
     db.add(course)
     await db.flush()
-
-    if data.technology_ids:
-        for tech_id in data.technology_ids:
-            ct = CourseTechnology(course_id=course.id, technology_id=tech_id)
-            db.add(ct)
-
+    await db.commit()
     return course
 
 
-@router.patch("/{course_slug}", response_model=CourseResponse)
+@router.patch("/{course_id}", response_model=CourseResponse)
 async def update_course(
-    course_slug: str,
+    course_id: UUID,
     data: CourseUpdate,
     current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Course).where(Course.slug == course_slug))
+    result = await db.execute(
+        select(Course).where(Course.id == course_id, Course.deleted_at.is_(None))
+    )
     course = result.scalar_one_or_none()
     if not course:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+        raise HTTPException(status_code=404, detail="Course not found")
 
-    update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        if hasattr(course, key):
-            setattr(course, key, value)
+    # Authorize - only owner or admin can edit
+    if course.author_id != current_user.id and current_user.role not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    for field, value in data.model_dump(exclude_unset=True).items():
+        if field == "difficulty":
+            setattr(course, field, DifficultyLevel(value))
+        elif field == "status":
+            setattr(course, field, ContentStatus(value))
+        else:
+            setattr(course, field, value)
 
     course.updated_at = datetime.now(timezone.utc)
-    if update_data.get("status") == "published" and not course.published_at:
-        course.published_at = datetime.now(timezone.utc)
-
+    await db.flush()
+    await db.commit()
     return course
 
 
-@router.delete("/{course_slug}")
-async def delete_course(
-    course_slug: str,
-    current_user: User = Depends(require_teacher),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(select(Course).where(Course.slug == course_slug))
-    course = result.scalar_one_or_none()
-    if not course:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
-
-    course.deleted_at = datetime.now(timezone.utc)
-    return {"detail": "Course deleted"}
-
-
-# ── Modules ─────────────────────────────────────────────────────
+# ── Modules CRUD ────────────────────────────────────────────────
 
 @router.get("/{course_slug}/modules", response_model=list[ModuleResponse])
-async def list_modules(
-    course_slug: str,
-    current_user: User = Depends(get_optional_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(select(Course).where(Course.slug == course_slug))
+async def list_course_modules(course_slug: str, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        select(Course).where(Course.slug == course_slug, Course.deleted_at.is_(None))
+    )
     course = result.scalar_one_or_none()
     if not course:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+        raise HTTPException(status_code=404, detail="Course not found")
 
     modules_result = await db.execute(
         select(Module)
-        .where(Module.course_id == course.id)
-        .order_by(Module.display_order)
+        .where(Module.course_id == course.id, Module.deleted_at.is_(None))
+        .order_by(Module.display_order.asc())
     )
     return modules_result.scalars().all()
 
@@ -205,90 +197,24 @@ async def create_module(
     current_user: User = Depends(require_teacher),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(Course).where(Course.slug == course_slug))
-    course = result.scalar_one_or_none()
-    if not course:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
-
-    module = Module(course_id=course.id, **data.model_dump())
-    db.add(module)
-    course.module_count = (course.module_count or 0) + 1
-    await db.flush()
-    return module
-
-
-@router.patch("/{course_slug}/modules/{module_slug}", response_model=ModuleResponse)
-async def update_module(
-    course_slug: str,
-    module_slug: str,
-    data: ModuleUpdate,
-    current_user: User = Depends(require_teacher),
-    db: AsyncSession = Depends(get_db),
-):
     result = await db.execute(
-        select(Module).join(Course).where(Course.slug == course_slug, Module.slug == module_slug)
+        select(Course).where(Course.slug == course_slug, Course.deleted_at.is_(None))
     )
-    module = result.scalar_one_or_none()
-    if not module:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Module not found")
-
-    update_data = data.model_dump(exclude_unset=True)
-    for key, value in update_data.items():
-        if hasattr(module, key):
-            setattr(module, key, value)
-
-    return module
-
-
-# ── Lessons ─────────────────────────────────────────────────────
-
-@router.get("/{course_slug}/lessons", response_model=list[dict])
-async def get_course_lessons(
-    course_slug: str,
-    current_user: User = Depends(get_optional_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(select(Course).where(Course.slug == course_slug))
     course = result.scalar_one_or_none()
     if not course:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+        raise HTTPException(status_code=404, detail="Course not found")
 
-    modules_result = await db.execute(
-        select(Module)
-        .where(Module.course_id == course.id)
-        .order_by(Module.display_order)
+    if course.author_id != current_user.id and current_user.role not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    module = Module(
+        course_id=course.id,
+        title=data.title,
+        slug=data.slug,
+        description=data.description,
+        display_order=data.display_order,
     )
-    modules = modules_result.scalars().all()
-
-    course_structure = []
-    for module in modules:
-        lessons_result = await db.execute(
-            select(Lesson)
-            .where(Lesson.module_id == module.id, Lesson.status == ContentStatus.PUBLISHED)
-            .order_by(Lesson.display_order)
-        )
-        lessons = []
-        for lesson in lessons_result.scalars().all():
-            lesson_data = {
-                "id": str(lesson.id),
-                "title": lesson.title,
-                "slug": lesson.slug,
-                "description": lesson.description,
-                "difficulty": lesson.difficulty.value if lesson.difficulty else "beginner",
-                "estimated_duration_minutes": lesson.estimated_duration_minutes,
-                "display_order": lesson.display_order,
-                "is_free_preview": lesson.is_free_preview,
-                "skill_tags": lesson.skill_tags,
-            }
-            lessons.append(lesson_data)
-
-        course_structure.append({
-            "id": str(module.id),
-            "title": module.title,
-            "slug": module.slug,
-            "description": module.description,
-            "display_order": module.display_order,
-            "lessons": lessons,
-        })
-
-    return course_structure
+    db.add(module)
+    await db.flush()
+    await db.commit()
+    return module
