@@ -1,7 +1,6 @@
 """AI content extraction and course generation - multi-provider edition.
 
-Supports Gemini (free), OpenAI, or any OpenAI-compatible API (Groq, DeepSeek).
-Configure via: AI_DEFAULT_PROVIDER, AI_OPENAI_BASE_URL, GEMINI_API_KEY, OPENAI_API_KEY
+Supports: Gemini (free), OpenAI, NVIDIA Nemotron, Groq, DeepSeek, OpenRouter.
 """
 import base64, json, io, re, time
 import httpx, structlog
@@ -13,7 +12,7 @@ logger = structlog.get_logger()
 
 
 def _sample_text(raw_text: str, max_chars: int = 8000) -> str:
-    """Smart sample from large text: head (50%) + middle (25%) + tail (25%)."""
+    """Smart sample: head 50% + middle 25% + tail 25%."""
     if len(raw_text) <= max_chars:
         return raw_text
     head_size = max_chars // 2
@@ -38,7 +37,7 @@ def _call_text_llm(prompt: str, max_tokens: int = 4096) -> str:
     provider = settings.AI_DEFAULT_PROVIDER.lower()
     if provider == "gemini" and settings.GEMINI_API_KEY:
         return _call_gemini_text(prompt, max_tokens)
-    if provider in ("openai", "anthropic") and settings.OPENAI_API_KEY:
+    if provider in ("openai", "anthropic", "nvidia") and settings.OPENAI_API_KEY:
         return _call_openai_text(prompt, max_tokens)
     if settings.GEMINI_API_KEY:
         return _call_gemini_text(prompt, max_tokens)
@@ -71,7 +70,6 @@ def _call_gemini_text(prompt: str, max_tokens: int = 4096) -> str:
     text = "".join(p.get("text", "") for p in cand.get("content", {}).get("parts", []))
     if not text:
         raise RuntimeError("Gemini returned empty text")
-    logger.info("gemini_text.ok", response_len=len(text))
     return text
 
 
@@ -95,10 +93,9 @@ def _call_gemini_multimodal(prompt: str, image: dict, max_tokens: int = 4096) ->
     if resp.status_code != 200:
         raise RuntimeError(f"Gemini HTTP {resp.status_code}: {resp.text[:300]}")
     data = resp.json()
-    candidates = data.get("candidates") or []
-    if not candidates:
+    if not data.get("candidates"):
         raise RuntimeError("Gemini blocked response")
-    cand = candidates[0]
+    cand = data["candidates"][0]
     text = "".join(p.get("text", "") for p in cand.get("content", {}).get("parts", []))
     if not text:
         raise RuntimeError("Gemini returned empty text")
@@ -211,7 +208,6 @@ def _pdf_ocr(data: bytes) -> str:
                     max_tokens=4096,
                 )
                 texts.append(t)
-                logger.info("ocr_page", page=i + 1, chars=len(t))
             except Exception as e:
                 logger.warning("ocr_page_failed", page=i + 1, error=str(e)[:100])
     return "\n\n".join(texts)
@@ -255,74 +251,130 @@ Output ONLY valid JSON, no other text, no markdown fences:
   ]
 }}
 
-Rules:
-- Create 5-8 modules with 2-4 lessons each
-- Use lowercase-hyphenated slugs
-- Difficulty: beginner, intermediate, or advanced
-- Make lessons specific and actionable
-- Cover the FULL scope of the content (head + middle + tail samples)
+Rules: 5-8 modules, 2-4 lessons each, lowercase-hyphenated slugs, cover FULL scope.
 
 Topic: {topic_hint}
 
-Content (sampled from {len(raw_text)} chars total):
+Content (sampled from {len(raw_text)} chars):
 {sampled}"""
-
     logger.info("preview.prompt", total_chars=len(raw_text), sampled_chars=len(sampled))
     resp = _call_text_llm(prompt, max_tokens=8192)
     result = _parse_json(resp)
-    logger.info("preview.done", course=result.get("course", {}).get("title"),
-                modules=len(result.get("modules", [])))
+    logger.info("preview.done", course=result.get("course", {}).get("title"))
     return result
 
 
 def generate_lesson_content(course_title: str, module_title: str, lesson_title: str) -> dict:
-    prompt = f"""Write a detailed programming lesson. Output ONLY valid JSON (no markdown fences, no other text):
+    prompt = f"""Write a detailed programming lesson. Output ONLY valid JSON (no markdown fences):
 
 {{
-  "content_markdown": "## Introduction\\n\\nStart with an engaging intro explaining what students will learn and why it matters.\\n\\n## Core Concepts\\n\\nExplain the main concept clearly with examples.\\n\\n```python\\n# Working code example\\nprint('Hello, world!')\\n```\\n\\n## Key Takeaways\\n\\n- Important point 1\\n- Important point 2\\n\\n## Practice\\n\\nBrief instructions for the exercises below.",
+  "content_markdown": "## Introduction\\n\\nEngaging intro...\\n\\n## Core Concepts\\n\\nExplanation with examples...\\n\\n```python\\n# Working code\\nprint('hello')\\n```\\n\\n## Key Takeaways\\n\\n- Point 1\\n- Point 2\\n\\n## Practice\\n\\nInstructions...",
   "exercises": [
     {{
       "title": "Practice: Exercise Name",
-      "description": "What the student will practice",
-      "instructions": "Complete the following task step by step",
+      "description": "What to practice",
+      "instructions": "Step by step",
       "exercise_type": "code_completion",
       "difficulty": "easy",
-      "starter_code": "# Write your solution here\\ndef solve():\\n    pass",
-      "solution_code": "# Correct solution\\ndef solve():\\n    return True",
+      "starter_code": "# Write code here\\ndef solve():\\n    pass",
+      "solution_code": "# Solution\\ndef solve():\\n    return True",
       "test_code": "assert solve() == True",
-      "hints": [
-        {{"level": 1, "content": "Think about the basic approach"}},
-        {{"level": 2, "content": "Consider using built-in functions"}}
-      ],
+      "hints": [{{"level": 1, "content": "Think about..."}}],
       "points": 10
     }}
   ]
 }}
 
-Requirements:
-- content_markdown: 400-600 words, use ## headers for sections
-- Include 2-3 python code blocks with practical, working examples
-- 1-2 meaningful exercises with complete starter_code and solution_code
-- Valid JSON: escape double quotes and backslashes in string values
-- No trailing commas
-- Make the content practical and hands-on
+Requirements: 400-600 words, 2-3 python blocks, 1-2 exercises, valid JSON, no trailing commas.
 
 Course: {course_title}
 Module: {module_title}
 Lesson: {lesson_title}"""
+    resp = _call_text_llm(prompt, max_tokens=4096)
+    return _parse_json(resp)
 
+
+def ai_edit_lesson(current_content: str, course_title: str, lesson_title: str, edit_instruction: str) -> dict:
+    prompt = f"""Edit a programming lesson based on instructions. Output ONLY valid JSON:
+
+{{
+  "content_markdown": "Full updated content with edits applied",
+  "exercises": [
+    {{"title": "...", "description": "...", "instructions": "...", "exercise_type": "code_completion", "difficulty": "easy", "starter_code": "# code\\n", "solution_code": "# solution\\n", "test_code": "pass", "hints": [{{"level": 1, "content": "..."}}], "points": 10}}
+  ]
+}}
+
+Course: {course_title}
+Lesson: {lesson_title}
+
+CURRENT CONTENT:
+{current_content}
+
+EDIT INSTRUCTION:
+{edit_instruction}
+
+Apply the edit. Keep unchanged parts as-is. Return COMPLETE content."""
+    resp = _call_text_llm(prompt, max_tokens=4096)
+    return _parse_json(resp)
+
+
+def ai_improve_course(course_data: dict) -> dict:
+    prompt = f"""Improve course metadata. Output ONLY valid JSON:
+
+Current: {json.dumps(course_data)}
+
+Return: {{"title": "...", "description": "...", "long_description": "...", "difficulty": "...", "skill_tags": [...], "learning_objectives": [...], "improvements_made": [...], "suggestions": [...]}}"""
+    resp = _call_text_llm(prompt, max_tokens=4096)
+    return _parse_json(resp)
+
+
+def ai_generate_module(course_title: str, course_description: str, existing_modules: list, module_topic: str = "") -> dict:
+    existing = "\n".join(f"- {m.get('title', '')}: {m.get('description', '')}" for m in existing_modules)
+    topic_line = f"Topic: {module_topic}" if module_topic else "Fill gaps in existing modules"
+    prompt = f"""Create a module for: {course_title}
+Description: {course_description}
+Existing: {existing}
+{topic_line}
+
+Output ONLY valid JSON: {{"title": "XX. Title", "slug": "slug", "description": "...", "display_order": {len(existing_modules)+1}, "lessons": [{{"title": "...", "slug": "...", "description": "...", "difficulty": "beginner", "estimated_duration_minutes": 30, "skill_tags": [...], "learning_objectives": [...]}}]}}
+2-4 lessons, hyphenated slugs."""
+    resp = _call_text_llm(prompt, max_tokens=4096)
+    return _parse_json(resp)
+
+
+def ai_evaluate_course(course_data: dict) -> dict:
+    prompt = f"""Evaluate course quality honestly. Output ONLY valid JSON:
+
+Course: {json.dumps(course_data)}
+
+Return: {{"quality_score": 7.5, "recommendation": "keep", "strengths": [...], "weaknesses": [...], "action_suggestions": [...], "should_delete": false, "reasoning": "..."}}
+Score 1-10. should_delete=true only if score<4 and unsalvageable."""
+    resp = _call_text_llm(prompt, max_tokens=4096)
+    return _parse_json(resp)
+
+
+def ai_regenerate_lesson(course_title: str, module_title: str, lesson_title: str, original_content: str = "", improvement_notes: str = "") -> dict:
+    ctx = f"\nPrevious: {original_content[:2000]}" if original_content else ""
+    notes = f"\nImprove: {improvement_notes}" if improvement_notes else ""
+    prompt = f"""Write an EXCEPTIONAL programming lesson. Output ONLY valid JSON:
+
+{{
+  "content_markdown": "## Introduction\\n\\nEngaging hook with real-world context...\\n\\n## Core Concepts\\n\\nClear step-by-step with analogies...\\n\\n```python\\n# Practical commented code\\n```\\n\\n## Deep Dive\\n\\nAdvanced insights...\\n\\n## Common Pitfalls\\n\\n- Mistake and fix...\\n\\n## Key Takeaways\\n\\n- Point 1\\n- Point 2\\n\\n## Practice\\n\\nInstructions...",
+  "exercises": [
+    {{"title": "Practice: ...", "description": "...", "instructions": "...", "exercise_type": "code_completion", "difficulty": "easy", "starter_code": "# code\\ndef solve():\\n    pass", "solution_code": "# solution\\ndef solve():\\n    return result", "test_code": "assert solve() == expected", "hints": [{{"level":1,"content":"..."}},{{"level":2,"content":"..."}}], "points": 10}}
+  ]
+}}
+
+500-800 words, 2-3 python blocks, Common Pitfalls section, 1-2 exercises, valid JSON.
+
+Course: {course_title}
+Module: {module_title}
+Lesson: {lesson_title}{ctx}{notes}"""
     resp = _call_text_llm(prompt, max_tokens=4096)
     return _parse_json(resp)
 
 
 def _sanitize_json_escapes(text: str) -> str:
-    """Fix invalid JSON escape sequences from LLM outputs.
-
-    LLMs often include regex/code patterns with invalid JSON escapes
-    like backslash-d, backslash-s, backslash-dot etc.
-    JSON only allows: double-quote, backslash, slash, b, f, n, r, t, uXXXX.
-    This uses a regex to find and fix all invalid escapes in one pass.
-    """
     return re.sub(r'\\([^"\\/bfnrtu])', r'\\\\\\1', text)
 
 
@@ -330,19 +382,15 @@ def _parse_json(text: str) -> dict:
     text = text.strip()
     if not text:
         raise ValueError("Empty AI response")
-
     logger.info("parse.start", preview=text[:200])
-
     try:
         return json.loads(text)
     except json.JSONDecodeError:
         pass
-
     try:
         return json.loads(_sanitize_json_escapes(text))
     except json.JSONDecodeError:
         pass
-
     for pat in [r'```json\\s*\\n([\\s\\S]*?)\\n```', r'```\\s*\\n([\\s\\S]*?)\\n```']:
         m = re.search(pat, text)
         if m:
@@ -355,42 +403,39 @@ def _parse_json(text: str) -> dict:
                 return json.loads(_sanitize_json_escapes(inner))
             except json.JSONDecodeError:
                 pass
-
-    depth = best_start = 0
-    found_start = -1
+    depth = start_pos = 0
+    sp = -1
     for i, ch in enumerate(text):
         if ch == '{':
             if depth == 0:
-                found_start = i
+                sp = i
             depth += 1
         elif ch == '}':
             depth -= 1
-            if depth == 0 and found_start >= 0:
-                candidate = text[found_start:i + 1]
+            if depth == 0 and sp >= 0:
+                c = text[sp:i + 1]
                 try:
-                    return json.loads(candidate)
+                    return json.loads(c)
                 except json.JSONDecodeError:
                     pass
                 try:
-                    return json.loads(_sanitize_json_escapes(candidate))
+                    return json.loads(_sanitize_json_escapes(c))
                 except json.JSONDecodeError:
                     pass
-                found_start = -1
-
+                sp = -1
     chunks = []
-    depth = start = 0
-    chunk_start = -1
+    depth = sc = 0
+    start = -1
     for i, ch in enumerate(text):
         if ch == '{':
             if depth == 0:
-                chunk_start = i
+                start = i
             depth += 1
         elif ch == '}':
             depth -= 1
-            if depth == 0 and chunk_start >= 0:
-                chunks.append(text[chunk_start:i + 1])
-                chunk_start = -1
-
+            if depth == 0 and start >= 0:
+                chunks.append(text[start:i + 1])
+                start = -1
     for chunk in sorted(chunks, key=len, reverse=True):
         try:
             return json.loads(chunk)
@@ -400,20 +445,18 @@ def _parse_json(text: str) -> dict:
             return json.loads(_sanitize_json_escapes(chunk))
         except json.JSONDecodeError:
             continue
-
     for chunk in chunks:
         try:
-            fixed = re.sub(r',\\s*}', '}', chunk)
-            fixed = re.sub(r',\\s*]', ']', fixed)
-            return json.loads(fixed)
+            f = re.sub(r',\\s*}', '}', chunk)
+            f = re.sub(r',\\s*]', ']', f)
+            return json.loads(f)
         except json.JSONDecodeError:
             continue
         try:
-            fixed = re.sub(r',\\s*}', '}', chunk)
-            fixed = re.sub(r',\\s*]', ']', fixed)
-            return json.loads(_sanitize_json_escapes(fixed))
+            f = re.sub(r',\\s*}', '}', chunk)
+            f = re.sub(r',\\s*]', ']', f)
+            return json.loads(_sanitize_json_escapes(f))
         except json.JSONDecodeError:
             continue
-
     logger.error("parse.all_failed", text=text[:3000])
-    raise ValueError(f"Could not parse AI response as JSON. Preview: {text[:200]}")
+    raise ValueError(f"Parse failed. Preview: {text[:200]}")
