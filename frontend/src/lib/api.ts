@@ -1,4 +1,4 @@
-// ── API Client for DSir ──
+// API Client for DSir
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -26,22 +26,15 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
 
   const config: RequestInit = {
     method,
-    headers: {
-      "Content-Type": "application/json",
-      ...headers,
-    },
+    headers: { "Content-Type": "application/json", ...headers },
   };
 
   if (auth && typeof window !== "undefined") {
     const token = localStorage.getItem("access_token");
-    if (token) {
-      (config.headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
-    }
+    if (token) (config.headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
   }
 
-  if (body) {
-    config.body = JSON.stringify(body);
-  }
+  if (body) config.body = JSON.stringify(body);
 
   const res = await fetch(`${API_BASE}${endpoint}`, config);
 
@@ -50,9 +43,7 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
     if (refreshed) {
       const retryConfig = { ...config };
       const token = localStorage.getItem("access_token");
-      if (token) {
-        (retryConfig.headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
-      }
+      if (token) (retryConfig.headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
       const retryRes = await fetch(`${API_BASE}${endpoint}`, retryConfig);
       if (!retryRes.ok) {
         const error = await retryRes.json().catch(() => ({ detail: "Request failed" }));
@@ -94,26 +85,20 @@ async function tryRefreshToken(): Promise<boolean> {
   }
 }
 
-// ── Auth ──
+// Auth
 
 export const auth = {
   signup: (data: { email: string; username: string; display_name: string; password: string }) =>
-    request<{ access_token: string; refresh_token: string }>("/api/v1/auth/signup", {
-      method: "POST", body: data, auth: false,
-    }),
+    request<{ access_token: string; refresh_token: string }>("/api/v1/auth/signup", { method: "POST", body: data, auth: false }),
   login: (data: { email: string; password: string }) =>
-    request<{ access_token: string; refresh_token: string }>("/api/v1/auth/login", {
-      method: "POST", body: data, auth: false,
-    }),
+    request<{ access_token: string; refresh_token: string }>("/api/v1/auth/login", { method: "POST", body: data, auth: false }),
   logout: () => request("/api/v1/auth/logout", { method: "POST" }),
   me: () => request<import("./types").User>("/api/v1/auth/me"),
   refresh: (refresh_token: string) =>
-    request<{ access_token: string; refresh_token: string }>("/api/v1/auth/refresh", {
-      method: "POST", body: { refresh_token }, auth: false,
-    }),
+    request<{ access_token: string; refresh_token: string }>("/api/v1/auth/refresh", { method: "POST", body: { refresh_token }, auth: false }),
 };
 
-// ── Users ──
+// Users
 
 export const users = {
   getDashboard: () => request<import("./types").Dashboard>("/api/v1/users/me/dashboard"),
@@ -126,15 +111,14 @@ export const users = {
   createBookmark: (data: { lesson_id?: string; exercise_id?: string; note?: string }) =>
     request("/api/v1/users/me/bookmarks", { method: "POST", body: data }),
   deleteBookmark: (id: string) => request(`/api/v1/users/me/bookmarks/${id}`, { method: "DELETE" }),
-  getNotes: (lessonId?: string) =>
-    request(`/api/v1/users/me/notes${lessonId ? `?lesson_id=${lessonId}` : ""}`),
+  getNotes: (lessonId?: string) => request(`/api/v1/users/me/notes${lessonId ? `?lesson_id=${lessonId}` : ""}`),
   createNote: (data: { lesson_id: string; content: string }) =>
     request("/api/v1/users/me/notes", { method: "POST", body: data }),
   getNotifications: (page = 1, unreadOnly = false) =>
     request(`/api/v1/users/me/notifications?page=${page}&size=20${unreadOnly ? "&unread_only=true" : ""}`),
 };
 
-// ── Courses ──
+// Courses
 
 export const courses = {
   list: (params: Record<string, string> = {}) => {
@@ -145,9 +129,10 @@ export const courses = {
   getFeatured: () => request<import("./types").CourseListItem[]>("/api/v1/courses/featured", { auth: false }),
   getModules: (slug: string) => request<import("./types").Module[]>(`/api/v1/courses/${slug}/modules`),
   getLessons: (slug: string) => request(`/api/v1/courses/${slug}/lessons`),
+  delete: (slug: string) => request(`/api/v1/courses/${slug}`, { method: "DELETE" }),
 };
 
-// ── Learning ──
+// Learning
 
 export const learning = {
   getLesson: (courseSlug: string, moduleSlug: string, lessonSlug: string) =>
@@ -161,7 +146,7 @@ export const learning = {
     request<import("./types").Exercise[]>(`/api/v1/learn/${courseSlug}/${moduleSlug}/${lessonSlug}/exercises`),
 };
 
-// ── Practice ──
+// Practice
 
 export const practice = {
   listExercises: (params: Record<string, string> = {}) => {
@@ -170,14 +155,12 @@ export const practice = {
   },
   getExercise: (id: string) => request(`/api/v1/practice/exercises/${id}`),
   submit: (exerciseId: string, code: string, language: string) =>
-    request<import("./types").Submission>(`/api/v1/practice/exercises/${exerciseId}/submit`, {
-      method: "POST", body: { code, language },
-    }),
+    request<import("./types").Submission>(`/api/v1/practice/exercises/${exerciseId}/submit`, { method: "POST", body: { code, language } }),
   getSubmissions: (page = 1, exerciseId?: string) =>
     request(`/api/v1/practice/submissions?page=${page}&size=20${exerciseId ? `&exercise_id=${exerciseId}` : ""}`),
 };
 
-// ── Revision ──
+// Revision
 
 export const revision = {
   getFlashcards: (page = 1) =>
@@ -190,7 +173,7 @@ export const revision = {
   getStats: () => request("/api/v1/revision/stats"),
 };
 
-// ── AI ──
+// AI
 
 export const ai = {
   getConversations: () => request<import("./types").AIConversation[]>("/api/v1/ai/conversations"),
@@ -198,24 +181,20 @@ export const ai = {
     request<import("./types").AIConversation>("/api/v1/ai/conversations", { method: "POST", body: data }),
   getMessages: (convId: string) => request<import("./types").AIMessage[]>(`/api/v1/ai/conversations/${convId}/messages`),
   sendMessage: (convId: string, content: string) =>
-    request<import("./types").AIMessage>(`/api/v1/ai/conversations/${convId}/messages`, {
-      method: "POST", body: { content },
-    }),
-  deleteConversation: (convId: string) =>
-    request(`/api/v1/ai/conversations/${convId}`, { method: "DELETE" }),
+    request<import("./types").AIMessage>(`/api/v1/ai/conversations/${convId}/messages`, { method: "POST", body: { content } }),
+  deleteConversation: (convId: string) => request(`/api/v1/ai/conversations/${convId}`, { method: "DELETE" }),
 };
 
-// ── Admin ──
+// Admin
 
 export const admin = {
   getDashboard: () => request("/api/v1/admin/dashboard"),
   getUsers: (page = 1) => request(`/api/v1/admin/users?page=${page}&size=20`),
   getCourses: (page = 1) => request(`/api/v1/admin/courses?page=${page}&size=20`),
+  deleteCourse: (id: string) => request(`/api/v1/admin/courses/${id}`, { method: "DELETE" }),
 };
 
 export { ApiError };
-
-// ── Generic API client (used by auth-store and learn/practice pages) ──
 
 export const api = {
   get: <T = any>(endpoint: string) => request<T>(endpoint),
