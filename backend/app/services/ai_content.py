@@ -12,7 +12,6 @@ logger = structlog.get_logger()
 
 
 def _sample_text(raw_text: str, max_chars: int = 8000) -> str:
-    """Smart sample: head 50% + middle 25% + tail 25%."""
     if len(raw_text) <= max_chars:
         return raw_text
     head_size = max_chars // 2
@@ -170,11 +169,8 @@ def _pdf_ocr(data: bytes) -> str:
 
 def generate_structure_preview(raw_text: str, topic_hint: str = "") -> dict:
     sampled = _sample_text(raw_text, max_chars=8000)
-    prompt = f"""Analyze this educational content and create a course outline. Output ONLY valid JSON, no other text, no markdown fences:
+    prompt = f"""Analyze this educational content and create a course outline. Output ONLY valid JSON (no markdown fences). Rules: 5-8 modules, 2-4 lessons each, hyphenated slugs. IMPORTANT: Never use triple-double-quotes (three double quotes in a row) inside JSON values.
 
-{{"course":{{"title":"...","slug":"...","description":"...","long_description":"...","difficulty":"beginner","estimated_duration_minutes":600,"skill_tags":[...],"learning_objectives":[...]}},"modules":[{{"title":"01. ...","slug":"...","description":"...","display_order":1,"lessons":[{{"title":"...","slug":"...","description":"...","difficulty":"beginner","estimated_duration_minutes":30,"skill_tags":[...],"learning_objectives":[...]}}]}}]}}
-
-Rules: 5-8 modules, 2-4 lessons each, lowercase-hyphenated slugs, cover FULL scope.
 Topic: {topic_hint}
 Content (sampled from {len(raw_text)} chars):
 {sampled}"""
@@ -186,11 +182,7 @@ Content (sampled from {len(raw_text)} chars):
 
 
 def generate_lesson_content(course_title: str, module_title: str, lesson_title: str) -> dict:
-    prompt = f"""Write a detailed programming lesson. Output ONLY valid JSON (no markdown fences):
-
-{{"content_markdown":"## Introduction\\n\\nEngaging intro...\\n\\n## Core Concepts\\n\\nExplanation with examples...\\n\\n```python\\n# Working code\\nprint('hello')\\n```\\n\\n## Key Takeaways\\n\\n- Point 1\\n- Point 2\\n\\n## Practice\\n\\nInstructions...","exercises":[{{"title":"Practice: Exercise Name","description":"What to practice","instructions":"Step by step","exercise_type":"code_completion","difficulty":"easy","starter_code":"# Write code here\\ndef solve():\\n    pass","solution_code":"# Solution\\ndef solve():\\n    return True","test_code":"assert solve() == True","hints":[{{"level":1,"content":"Think about..."}}],"points":10}}]}}
-
-Requirements: 400-600 words, 2-3 python blocks, 1-2 exercises, valid JSON, no trailing commas.
+    prompt = f"""Write a detailed programming lesson. Output ONLY valid JSON with content_markdown and exercises fields. CRITICAL: Never use three double quotes in a row anywhere. Use single backticks for code. Escape all backslashes properly.
 Course: {course_title}
 Module: {module_title}
 Lesson: {lesson_title}"""
@@ -199,30 +191,17 @@ Lesson: {lesson_title}"""
 
 
 def ai_edit_lesson(current_content: str, course_title: str, lesson_title: str, edit_instruction: str) -> dict:
-    prompt = f"""Edit a programming lesson based on instructions. Output ONLY valid JSON:
-
-{{"content_markdown":"Full updated content with edits applied","exercises":[{{"title":"...","description":"...","instructions":"...","exercise_type":"code_completion","difficulty":"easy","starter_code":"# code\\n","solution_code":"# solution\\n","test_code":"pass","hints":[{{"level":1,"content":"..."}}],"points":10}}]}}
-
+    prompt = f"""Edit a programming lesson. Output ONLY valid JSON with content_markdown and exercises. Never use three double quotes in a row.
 Course: {course_title}
 Lesson: {lesson_title}
-
-CURRENT CONTENT:
-{current_content}
-
-EDIT INSTRUCTION:
-{edit_instruction}
-
-Apply the edit. Keep unchanged parts as-is. Return COMPLETE content."""
+CURRENT: {current_content}
+EDIT: {edit_instruction}"""
     resp = _call_text_llm(prompt, max_tokens=4096)
     return _parse_json(resp)
 
 
 def ai_improve_course(course_data: dict) -> dict:
-    prompt = f"""Improve course metadata. Output ONLY valid JSON:
-
-Current: {json.dumps(course_data)}
-
-Return: {{"title":"...","description":"...","long_description":"...","difficulty":"...","skill_tags":[...],"learning_objectives":[...],"improvements_made":[...],"suggestions":[...]}}"""
+    prompt = f"Improve this course metadata. Output ONLY valid JSON. Course: {json.dumps(course_data)}"
     resp = _call_text_llm(prompt, max_tokens=4096)
     return _parse_json(resp)
 
@@ -230,24 +209,13 @@ Return: {{"title":"...","description":"...","long_description":"...","difficulty
 def ai_generate_module(course_title: str, course_description: str, existing_modules: list, module_topic: str = "") -> dict:
     existing = "\n".join(f"- {m.get('title', '')}: {m.get('description', '')}" for m in existing_modules)
     topic_line = f"Topic: {module_topic}" if module_topic else "Fill gaps in existing modules"
-    prompt = f"""Create a module for: {course_title}
-Description: {course_description}
-Existing: {existing}
-{topic_line}
-
-Output ONLY valid JSON: {{"title":"XX. Title","slug":"slug","description":"...","display_order":{len(existing_modules)+1},"lessons":[{{"title":"...","slug":"...","description":"...","difficulty":"beginner","estimated_duration_minutes":30,"skill_tags":[...],"learning_objectives":[...]}}]}}
-2-4 lessons, hyphenated slugs."""
+    prompt = f"Create a module for: {course_title}\nDesc: {course_description}\nExisting: {existing}\n{topic_line}\nOutput ONLY valid JSON. Never use three double quotes in a row."
     resp = _call_text_llm(prompt, max_tokens=4096)
     return _parse_json(resp)
 
 
 def ai_evaluate_course(course_data: dict) -> dict:
-    prompt = f"""Evaluate course quality honestly. Output ONLY valid JSON:
-
-Course: {json.dumps(course_data)}
-
-Return: {{"quality_score":7.5,"recommendation":"keep","strengths":[...],"weaknesses":[...],"action_suggestions":[...],"should_delete":false,"reasoning":"..."}}
-Score 1-10. should_delete=true only if score<4 and unsalvageable."""
+    prompt = f"Evaluate this course quality 1-10. Output ONLY valid JSON. Course: {json.dumps(course_data)}"
     resp = _call_text_llm(prompt, max_tokens=4096)
     return _parse_json(resp)
 
@@ -255,14 +223,7 @@ Score 1-10. should_delete=true only if score<4 and unsalvageable."""
 def ai_regenerate_lesson(course_title: str, module_title: str, lesson_title: str, original_content: str = "", improvement_notes: str = "") -> dict:
     ctx = f"\nPrevious: {original_content[:2000]}" if original_content else ""
     notes = f"\nImprove: {improvement_notes}" if improvement_notes else ""
-    prompt = f"""Write an EXCEPTIONAL programming lesson. Output ONLY valid JSON:
-
-{{"content_markdown":"## Introduction\\n\\nEngaging hook...\\n\\n## Core Concepts\\n\\nClear step-by-step...\\n\\n```python\\n# Practical code\\n```\\n\\n## Deep Dive\\n\\nAdvanced insights...\\n\\n## Common Pitfalls\\n\\n- Mistake and fix...\\n\\n## Key Takeaways\\n\\n- Point 1\\n- Point 2\\n\\n## Practice\\n\\nInstructions...","exercises":[{{"title":"Practice: ...","description":"...","instructions":"...","exercise_type":"code_completion","difficulty":"easy","starter_code":"# code\\ndef solve():\\n    pass","solution_code":"# solution\\ndef solve():\\n    return result","test_code":"assert solve() == expected","hints":[{{"level":1,"content":"..."}},{{"level":2,"content":"..."}}],"points":10}}]}}
-
-500-800 words, 2-3 python blocks, Common Pitfalls section, 1-2 exercises, valid JSON.
-Course: {course_title}
-Module: {module_title}
-Lesson: {lesson_title}{ctx}{notes}"""
+    prompt = f"Write an EXCEPTIONAL lesson. Output ONLY valid JSON with content_markdown and exercises. CRITICAL: Never use three double quotes in a row. 500-800 words, 2-3 python blocks, 1-2 exercises.\nCourse: {course_title}\nModule: {module_title}\nLesson: {lesson_title}{ctx}{notes}"
     resp = _call_text_llm(prompt, max_tokens=4096)
     return _parse_json(resp)
 
@@ -271,32 +232,62 @@ def _sanitize_json_escapes(text: str) -> str:
     return re.sub(r'\\([^"\\/bfnrtu])', r'\\\\\\1', text)
 
 
+def _fix_triple_quotes(text: str) -> str:
+    """Escape double-quote sequences inside JSON string values.
+    LLMs teaching Python often include triple-quote examples in markdown,
+    creating unescaped quote sequences that break JSON parsing."""
+    out = []
+    in_string = False
+    escape_next = False
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if not in_string:
+            if ch == '"':
+                in_string = True
+            out.append(ch)
+        else:
+            if escape_next:
+                escape_next = False
+                out.append(ch)
+            elif ch == '\\':
+                escape_next = True
+                out.append(ch)
+            elif ch == '"' and i + 1 < len(text) and text[i + 1] == '"':
+                out.append('\\"')
+            else:
+                if ch == '"':
+                    in_string = False
+                out.append(ch)
+        i += 1
+    return ''.join(out)
+
+
 def _parse_json(text: str) -> dict:
     text = text.strip()
     if not text:
         raise ValueError("Empty AI response")
     logger.info("parse.start", preview=text[:200])
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    try:
-        return json.loads(_sanitize_json_escapes(text))
-    except json.JSONDecodeError:
-        pass
-    # NB: use byte patterns to avoid double-escaping through JSON transport
+
+    def _try_all(t: str):
+        for s in (t, _sanitize_json_escapes(t), _fix_triple_quotes(t), _sanitize_json_escapes(_fix_triple_quotes(t))):
+            try:
+                return json.loads(s)
+            except (json.JSONDecodeError, ValueError):
+                continue
+        return None
+
+    r = _try_all(text)
+    if r is not None:
+        return r
+
     _fence_re = r'```(?:json)?[ \t]*\n([\s\S]*?)\n[ \t]*```'
     m = re.search(_fence_re, text)
     if m:
-        inner = m.group(1).strip()
-        try:
-            return json.loads(inner)
-        except json.JSONDecodeError:
-            pass
-        try:
-            return json.loads(_sanitize_json_escapes(inner))
-        except json.JSONDecodeError:
-            pass
+        r = _try_all(m.group(1).strip())
+        if r is not None:
+            return r
+
     depth = sp = 0
     start_pos = -1
     for i, ch in enumerate(text):
@@ -307,16 +298,11 @@ def _parse_json(text: str) -> dict:
         elif ch == '}':
             depth -= 1
             if depth == 0 and start_pos >= 0:
-                c = text[start_pos:i + 1]
-                try:
-                    return json.loads(c)
-                except json.JSONDecodeError:
-                    pass
-                try:
-                    return json.loads(_sanitize_json_escapes(c))
-                except json.JSONDecodeError:
-                    pass
+                r = _try_all(text[start_pos:i + 1])
+                if r is not None:
+                    return r
                 start_pos = -1
+
     chunks = []
     depth = sc = 0
     start = -1
@@ -330,27 +316,19 @@ def _parse_json(text: str) -> dict:
             if depth == 0 and start >= 0:
                 chunks.append(text[start:i + 1])
                 start = -1
+
     for chunk in sorted(chunks, key=len, reverse=True):
-        try:
-            return json.loads(chunk)
-        except json.JSONDecodeError:
-            continue
-        try:
-            return json.loads(_sanitize_json_escapes(chunk))
-        except json.JSONDecodeError:
-            continue
-    for chunk in chunks:
+        r = _try_all(chunk)
+        if r is not None:
+            return r
         try:
             f = re.sub(r',[ \t]*}', '}', chunk)
             f = re.sub(r',[ \t]*]', ']', f)
-            return json.loads(f)
-        except json.JSONDecodeError:
+            r = _try_all(f)
+            if r is not None:
+                return r
+        except Exception:
             continue
-        try:
-            f = re.sub(r',[ \t]*}', '}', chunk)
-            f = re.sub(r',[ \t]*]', ']', f)
-            return json.loads(_sanitize_json_escapes(f))
-        except json.JSONDecodeError:
-            continue
+
     logger.error("parse.all_failed", text=text[:3000])
     raise ValueError(f"Parse failed. Preview: {text[:200]}")
