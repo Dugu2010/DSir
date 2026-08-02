@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
+from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models import (
     User, Course, Module, Lesson, Enrollment, Category,
@@ -24,7 +25,7 @@ from uuid import UUID
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-# ── Profile ─────────────────────────────────────────────────────
+# -- Profile --
 
 @router.get("/me", response_model=UserResponse)
 async def get_profile(current_user: User = Depends(get_current_active_user)):
@@ -74,7 +75,7 @@ async def get_stats(current_user: User = Depends(get_current_active_user), db: A
     return stats
 
 
-# ── Dashboard ───────────────────────────────────────────────────
+# -- Dashboard --
 
 @router.get("/me/dashboard", response_model=DashboardResponse)
 async def get_dashboard(current_user: User = Depends(get_current_active_user), db: AsyncSession = Depends(get_db)):
@@ -86,9 +87,10 @@ async def get_dashboard(current_user: User = Depends(get_current_active_user), d
         db.add(stats)
         await db.flush()
 
-    # Continue learning - enrollments sorted by last accessed
+    # Continue learning - enrollments sorted by last accessed (eager load course)
     enrollments_result = await db.execute(
         select(Enrollment)
+        .options(selectinload(Enrollment.course))
         .where(Enrollment.user_id == current_user.id, Enrollment.is_completed == False)
         .order_by(Enrollment.last_accessed_at.desc())
         .limit(5)
@@ -167,12 +169,13 @@ async def get_dashboard(current_user: User = Depends(get_current_active_user), d
     )
 
 
-# ── Enrollments ─────────────────────────────────────────────────
+# -- Enrollments --
 
 @router.get("/me/enrollments", response_model=list[EnrollmentResponse])
 async def get_enrollments(current_user: User = Depends(get_current_active_user), db: AsyncSession = Depends(get_db)):
     result = await db.execute(
         select(Enrollment)
+        .options(selectinload(Enrollment.course))
         .where(Enrollment.user_id == current_user.id)
         .order_by(Enrollment.last_accessed_at.desc())
     )
@@ -205,7 +208,7 @@ async def enroll_course(
     return {"detail": "Enrolled successfully"}
 
 
-# ── Bookmarks ───────────────────────────────────────────────────
+# -- Bookmarks --
 
 @router.get("/me/bookmarks", response_model=list[BookmarkResponse])
 async def get_bookmarks(current_user: User = Depends(get_current_active_user), db: AsyncSession = Depends(get_db)):
@@ -248,7 +251,7 @@ async def delete_bookmark(
     return {"detail": "Bookmark removed"}
 
 
-# ── Notes ───────────────────────────────────────────────────────
+# -- Notes --
 
 @router.get("/me/notes", response_model=list[UserNoteResponse])
 async def get_notes(
@@ -297,7 +300,7 @@ async def delete_note(
     return {"detail": "Note deleted"}
 
 
-# ── Notifications ───────────────────────────────────────────────
+# -- Notifications --
 
 @router.get("/me/notifications", response_model=PaginatedResponse)
 async def get_notifications(
@@ -363,7 +366,7 @@ async def mark_all_read(
     return {"detail": "All notifications marked as read"}
 
 
-# ── Admin Users ─────────────────────────────────────────────────
+# -- Admin Users --
 
 @router.get("/", response_model=PaginatedResponse)
 async def list_users(
