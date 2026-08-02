@@ -12,6 +12,7 @@ import base64
 import json
 import io
 import re
+import time
 import httpx
 from typing import Optional
 import structlog
@@ -205,11 +206,11 @@ def _call_openai_compatible_text(prompt: str, max_tokens: int = 4096) -> str:
 
     Works with: OpenAI, Groq, DeepSeek, OpenRouter, Together AI, etc.
     Set AI_OPENAI_BASE_URL for non-OpenAI providers.
+    Automatically retries on 429 rate-limit errors with exponential backoff.
     """
     base_url = settings.AI_OPENAI_BASE_URL or "https://api.openai.com/v1"
     model = settings.AI_DEFAULT_MODEL or "gpt-4o-mini"
 
-    # Strip trailing slash from base URL
     base_url = base_url.rstrip("/")
     url = f"{base_url}/chat/completions"
 
@@ -220,39 +221,70 @@ def _call_openai_compatible_text(prompt: str, max_tokens: int = 4096) -> str:
         "temperature": 0.2,
     }
 
-    resp = httpx.post(
-        url,
-        headers={
-            "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json=body,
-        timeout=180.0,
-    )
+    last_error = None
+    for attempt in range(5):
+        resp = httpx.post(
+            url,
+            headers={
+                "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=body,
+            timeout=180.0,
+        )
 
-    if resp.status_code != 200:
+        if resp.status_code == 200:
+            data = resp.json()
+            choices = data.get("choices", [])
+            if not choices:
+                raise RuntimeError("OpenAI-compatible returned no choices")
+
+            text = choices[0].get("message", {}).get("content", "")
+            if not text:
+                finish = choices[0].get("finish_reason", "unknown")
+                raise RuntimeError(f"OpenAI-compatible empty response (finish={finish})")
+
+            logger.info(
+                "openai_compatible.ok",
+                model=model,
+                base_url=base_url,
+                prompt_len=len(prompt),
+                response_len=len(text),
+                attempts=attempt + 1,
+            )
+            return text
+
+        # ── Rate limit: wait and retry ──
+        if resp.status_code == 429:
+            # Extract retry-after from error message (e.g. "try again in 6.03s")
+            retry_secs = 5.0  # default
+            try:
+                err = resp.json()
+                msg = err.get("error", {}).get("message", "")
+                m = re.search(r'try again in ([\d.]+)s', msg)
+                if m:
+                    retry_secs = float(m.group(1)) + 0.5
+            except Exception:
+                pass
+
+            # Backoff multiplier for subsequent attempts
+            wait = retry_secs * (2 ** attempt)
+            logger.info(
+                "openai_compatible.rate_limited",
+                model=model,
+                attempt=attempt + 1,
+                wait_secs=round(wait, 1),
+            )
+            time.sleep(wait)
+            last_error = f"Rate limited after {attempt + 1} attempts"
+            continue
+
+        # ── Other errors — raise immediately ──
         raise RuntimeError(
             f"OpenAI-compatible HTTP {resp.status_code}: {resp.text[:300]}"
         )
 
-    data = resp.json()
-    choices = data.get("choices", [])
-    if not choices:
-        raise RuntimeError("OpenAI-compatible returned no choices")
-
-    text = choices[0].get("message", {}).get("content", "")
-    if not text:
-        finish = choices[0].get("finish_reason", "unknown")
-        raise RuntimeError(f"OpenAI-compatible empty response (finish={finish})")
-
-    logger.info(
-        "openai_compatible.ok",
-        model=model,
-        base_url=base_url,
-        prompt_len=len(prompt),
-        response_len=len(text),
-    )
-    return text
+    raise RuntimeError(last_error or "OpenAI-compatible failed after 5 retries")
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -449,6 +481,48 @@ Lesson: {lesson_title}"""
 # JSON PARSING (bulletproof)
 # ═══════════════════════════════════════════════════════════════
 
+def _sanitize_json_escapes(text: str) -> str:
+    """Fix common JSON escape issues from LLM outputs (especially Llama/Groq).
+
+    LLMs often include regex/code patterns with invalid JSON escape sequences
+    like \d, \s, \. etc. JSON only allows \", \\, \/, \b, \f, \n, \r, \t, \uXXXX.
+    We escape the backslash for invalid sequences so the JSON is valid.
+    """
+    # Only operate on string content (between quotes), not structure
+    # Simple strategy: fix known problematic sequences
+    # These are common in regex/code patterns that LLMs output
+    invalid_escapes = [
+        (r'\d', r'\\d'),
+        (r'\s', r'\\s'),
+        (r'\w', r'\\w'),
+        (r'\D', r'\\D'),
+        (r'\S', r'\\S'),
+        (r'\W', r'\\W'),
+        (r'\.', r'\\.'),
+        (r'\(', r'\\('),
+        (r'\)', r'\\)'),
+        (r'\[', r'\\['),
+        (r'\]', r'\\]'),
+        (r'\{', r'\\{'),
+        (r'\}', r'\\}'),
+        (r'\+', r'\\+'),
+        (r'\*', r'\\*'),
+        (r'\?', r'\\?'),
+        (r'\|', r'\\|'),
+        (r'\^', r'\\^'),
+        (r'\$', r'\\$'),
+    ]
+
+    for pattern, replacement in invalid_escapes:
+        # Only replace inside JSON string values (not structure)
+        # We use a lookbehind to avoid replacing already-escaped sequences
+        # Simple approach: just replace all occurrences — already-escaped ones
+        # (\\) will become (\\) which is fine
+        text = text.replace(pattern, replacement)
+
+    return text
+
+
 def _parse_json(text: str) -> dict:
     """Extract JSON from any AI response. Multiple strategies."""
     text = text.strip()
@@ -463,12 +537,23 @@ def _parse_json(text: str) -> dict:
     except json.JSONDecodeError as e:
         logger.info("parse_json.direct_failed", error=str(e)[:100])
 
+    # Strategy 1b: sanitize invalid escapes and retry
+    try:
+        sanitized = _sanitize_json_escapes(text)
+        return json.loads(sanitized)
+    except json.JSONDecodeError:
+        pass
+
     # Strategy 2: extract from ```json or ``` fences
     for pat in [r'```json\s*\n([\s\S]*?)\n```', r'```\s*\n([\s\S]*?)\n```']:
         m = re.search(pat, text)
         if m:
             try:
                 return json.loads(m.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+            try:
+                return json.loads(_sanitize_json_escapes(m.group(1).strip()))
             except json.JSONDecodeError:
                 pass
 
@@ -486,6 +571,10 @@ def _parse_json(text: str) -> dict:
                 try:
                     candidate = text[best_start:i + 1]
                     return json.loads(candidate)
+                except json.JSONDecodeError:
+                    pass
+                try:
+                    return json.loads(_sanitize_json_escapes(text[best_start:i + 1]))
                 except json.JSONDecodeError:
                     best_start = -1
 
@@ -509,14 +598,24 @@ def _parse_json(text: str) -> dict:
             return json.loads(chunk)
         except json.JSONDecodeError:
             continue
+        try:
+            return json.loads(_sanitize_json_escapes(chunk))
+        except json.JSONDecodeError:
+            continue
 
-    # Strategy 5: try to fix common JSON issues
+    # Strategy 5: try to fix common JSON issues + sanitize
     for chunk in chunks:
         try:
             # Fix trailing commas
             fixed = re.sub(r',\s*}', '}', chunk)
             fixed = re.sub(r',\s*]', ']', fixed)
             return json.loads(fixed)
+        except json.JSONDecodeError:
+            continue
+        try:
+            fixed = re.sub(r',\s*}', '}', chunk)
+            fixed = re.sub(r',\s*]', ']', fixed)
+            return json.loads(_sanitize_json_escapes(fixed))
         except json.JSONDecodeError:
             continue
 
