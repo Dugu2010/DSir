@@ -210,10 +210,10 @@ async def analytics_overview(
     return {"daily_signups": list(reversed(signups)), "popular_courses": popular_courses}
 
 
-# ==========================================================
+# ================================================================
 # AI CONTENT GENERATION
 # Flow: Upload -> Extract -> Preview -> [Admin Approves] -> Import
-# ==========================================================
+# ================================================================
 
 @router.post("/ai/preview")
 async def ai_preview(
@@ -221,6 +221,8 @@ async def ai_preview(
     topic: str = Query(default=""),
     admin_user: UserModel = Depends(require_admin),
 ):
+    """Step 1: Upload file -> extract text -> AI generates course structure preview.
+    Returns structure with module/lesson titles for admin review."""
     from app.services.ai_content import extract_text, generate_structure_preview
 
     data = await file.read()
@@ -233,7 +235,7 @@ async def ai_preview(
     if not raw_text or len(raw_text.strip()) < 50:
         raise HTTPException(
             status_code=400,
-            detail=f"Could not extract enough text from this file. Extracted {len(raw_text)} characters."
+            detail=f"Could not extract enough text from this file. Extracted {len(raw_text)} characters. Try a text-based PDF or image."
         )
     logger.info("ai.preview.extracted", text_len=len(raw_text))
 
@@ -271,19 +273,21 @@ async def ai_import_course(
     admin_user: UserModel = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
+    """Step 2: Admin approved the structure -> generate lesson content via AI -> import into DB."""
     from app.services.ai_content import generate_lesson_content
 
     c = structure.get("course", {})
     modules_data = structure.get("modules", [])
 
     if not c or not modules_data:
-        raise HTTPException(status_code=400, detail="Missing course or modules")
+        raise HTTPException(status_code=400, detail="Missing course or modules in structure")
 
     slug = c.get("slug", "ai-course")
     existing = await db.execute(select(Course).where(Course.slug == slug))
     if existing.scalar_one_or_none():
         slug = f"{slug}-{uuid4().hex[:6]}"
 
+    now = datetime.now(timezone.utc)
     course = Course(
         id=uuid4(), title=c.get("title", "Course"), slug=slug,
         description=c.get("description", ""), long_description=c.get("long_description", ""),
@@ -291,8 +295,7 @@ async def ai_import_course(
         estimated_duration_minutes=c.get("estimated_duration_minutes", 600),
         learning_objectives=c.get("learning_objectives", []),
         skill_tags=c.get("skill_tags", []),
-        status=ContentStatus.PUBLISHED, is_featured=False, is_free=True,
-        published_at=datetime.now(timezone.utc),
+        status=ContentStatus.PUBLISHED, published_at=now, is_featured=False, is_free=True,
         author_id=admin_user.id,
         enrollment_count=0, rating_average=0.0, rating_count=0,
         module_count=len(modules_data),
