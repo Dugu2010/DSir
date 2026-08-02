@@ -186,10 +186,13 @@ Content (sampled from {len(raw_text)} chars):
 
 
 def generate_lesson_content(course_title: str, module_title: str, lesson_title: str) -> dict:
-    prompt = f"""Write a detailed programming lesson. Output ONLY valid JSON with content_markdown and exercises fields. CRITICAL: Never use three double quotes in a row anywhere. Use single backticks for code. Escape all backslashes properly.
+    prompt = f"""You are a JSON API. Output ONLY a raw JSON object, no explanation, no markdown, no reasoning. START with {{ and END with }}. Fields: content_markdown (detailed lesson in markdown, 400-600 words, 2-3 code examples), exercises (array of {{title, description, instructions, starter_code, solution_code, hints, points}}). CRITICAL RULES: Never use triple double quotes. Escape all backslashes. Use single backticks for inline code.
+
 Course: {course_title}
 Module: {module_title}
-Lesson: {lesson_title}"""
+Lesson: {lesson_title}
+
+JSON:"""
     resp = _call_text_llm(prompt, max_tokens=4096)
     return _parse_json(resp)
 
