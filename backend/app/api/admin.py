@@ -169,21 +169,20 @@ async def admin_delete_course(
     course = result.scalar_one_or_none()
     if not course:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
-    
+
     now = datetime.now(timezone.utc)
     course.deleted_at = now
-    
-    # Cascade soft-delete modules, lessons, exercises
-    modules = await db.execute(select(Module).where(Module.course_id == course_id))
-    for mod in modules.scalars().all():
+
+    modules_result = await db.execute(select(Module).where(Module.course_id == course_id))
+    for mod in modules_result.scalars().all():
         mod.deleted_at = now
-        lessons = await db.execute(select(Lesson).where(Lesson.module_id == mod.id))
-        for les in lessons.scalars().all():
+        lessons_result = await db.execute(select(Lesson).where(Lesson.module_id == mod.id))
+        for les in lessons_result.scalars().all():
             les.deleted_at = now
-            exercises = await db.execute(select(Exercise).where(Exercise.lesson_id == les.id))
-            for ex in exercises.scalars().all():
+            exercises_result = await db.execute(select(Exercise).where(Exercise.lesson_id == les.id))
+            for ex in exercises_result.scalars().all():
                 ex.deleted_at = now
-    
+
     await db.commit()
     logger.info("admin.course.deleted", course_slug=course.slug)
     return {"detail": f"Course '{course.title}' deleted"}
@@ -249,7 +248,6 @@ async def analytics_overview(
 
 # ================================================================
 # AI CONTENT GENERATION (ASYNC)
-# Flow: Upload -> Extract -> Preview -> [Approve] -> Instant Save -> Background Generate
 # ================================================================
 
 @router.post("/ai/preview")
@@ -258,7 +256,7 @@ async def ai_preview(
     topic: str = Query(default=""),
     admin_user: UserModel = Depends(require_admin),
 ):
-    """Step 1: Upload -> extract -> AI preview. Takes ~30-60s."""
+    """Step 1: Upload file -> extract text -> AI generates course structure preview."""
     from app.services.ai_content import extract_text, generate_structure_preview
 
     data = await file.read()
@@ -305,7 +303,7 @@ async def ai_preview(
 @router.post("/ai/import", response_model=AICourseImportResponse)
 async def ai_import_course(
     structure: dict = Body(...),
-    background_tasks: BackgroundTasks = Depends(),
+    background_tasks: BackgroundTasks,
     admin_user: UserModel = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -360,8 +358,8 @@ async def ai_import_course(
                 title=les.get("title", f"L{li+1}"),
                 slug=les.get("slug", f"lesson-{li+1}"),
                 description=les.get("description", ""),
-                content="Generating content...",
-                content_markdown="Generating content...",
+                content="⏳ Generating content...",
+                content_markdown="⏳ Generating content...",
                 learning_objectives=les.get("learning_objectives", []),
                 difficulty=DifficultyLevel(les.get("difficulty", "beginner")),
                 estimated_duration_minutes=les.get("estimated_duration_minutes", 30),
@@ -374,9 +372,8 @@ async def ai_import_course(
 
     await db.commit()
 
-    # Fire background generation (returns instantly, course already live)
-    course_id_str = str(course.id)
-    background_tasks.add_task(_bg_generate_lessons, course_id_str, course_title, modules_data)
+    # Fire background generation
+    background_tasks.add_task(_bg_generate_lessons, str(course.id), course_title, modules_data)
 
     logger.info("ai.import.queued", slug=slug, lessons=total_lessons)
 
@@ -402,23 +399,22 @@ async def ai_import_status(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    # Count generated vs total lessons
     total_result = await db.execute(
         select(func.count(Lesson.id))
         .join(Module).where(Module.course_id == course.id)
     )
     total = total_result.scalar() or 0
 
+    PLACEHOLDER = "⏳ Generating content..."
     generated_result = await db.execute(
         select(func.count(Lesson.id))
         .join(Module).where(
             Module.course_id == course.id,
-            Lesson.content_markdown != "Generating content..."
+            Lesson.content_markdown != PLACEHOLDER
         )
     )
     generated = generated_result.scalar() or 0
 
-    # Per-lesson status
     modules_result = await db.execute(
         select(Module).where(Module.course_id == course.id).order_by(Module.display_order)
     )
@@ -433,7 +429,7 @@ async def ai_import_status(
                 "title": les.title,
                 "slug": les.slug,
                 "module_title": mod.title,
-                "generated": les.content_markdown != "Generating content...",
+                "generated": les.content_markdown != PLACEHOLDER,
             })
 
     return {
@@ -445,8 +441,7 @@ async def ai_import_status(
 
 
 async def _bg_generate_lessons(course_id_str: str, course_title: str, modules_data: list):
-    """Background task: generate AI content for each lesson, update DB.
-    Runs AFTER the response is sent. Each lesson takes ~15-25s (NVIDIA 120B)."""
+    """Background task: generate AI content for each lesson, update DB."""
     from app.database import async_session_factory
     from app.services.ai_content import generate_lesson_content
     from app.models import Module as M, Lesson as L, Exercise as E
@@ -478,7 +473,6 @@ async def _bg_generate_lessons(course_id_str: str, course_title: str, modules_da
                     continue
 
                 try:
-                    # Run blocking AI call in thread pool (prevents event loop blocking)
                     content = await asyncio.to_thread(
                         generate_lesson_content,
                         course_title,
@@ -490,7 +484,6 @@ async def _bg_generate_lessons(course_id_str: str, course_title: str, modules_da
                     lesson.content = md
                     lesson.content_markdown = md
 
-                    # Replace exercises
                     await db.execute(delete(E).where(E.lesson_id == lesson.id))
 
                     for ei, ex in enumerate(content.get("exercises", [])):
@@ -521,11 +514,10 @@ async def _bg_generate_lessons(course_id_str: str, course_title: str, modules_da
 
                     await db.commit()
                     generated += 1
-                    logger.info("bg.gen.lesson", title=les_data.get("title"), progress=f"{generated}/{len(modules_data)}")
 
                 except Exception as e:
                     failed += 1
-                    lesson.content_markdown = f"# {les_data.get('title')}\n\nContent generation failed. Please try regenerating."
+                    lesson.content_markdown = f"# {les_data.get('title')}\n\nContent generation failed. Please regenerate."
                     lesson.content = lesson.content_markdown
                     await db.commit()
                     logger.warning("bg.gen.failed", title=les_data.get("title"), error=str(e)[:100])
