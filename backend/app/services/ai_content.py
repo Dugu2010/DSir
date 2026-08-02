@@ -22,6 +22,53 @@ settings = get_settings()
 logger = structlog.get_logger()
 
 # ═══════════════════════════════════════════════════════════════
+# SMART TEXT SAMPLING — stays under free tier token limits
+# ═══════════════════════════════════════════════════════════════
+
+def _sample_text(raw_text: str, max_chars: int = 8000) -> str:
+    """Smart sample from large text: head + key excerpts + tail.
+
+    Strategy:
+    - Head (50%): intro, TOC, early chapters — usually most important
+    - Middle samples (25%): evenly-spaced paragraph excerpts
+    - Tail (25%): advanced topics, appendices
+
+    Keeps total prompt well under free tier TPM limits (Groq: 12K).
+    """
+    if len(raw_text) <= max_chars:
+        return raw_text
+
+    head_size = max_chars // 2
+    tail_size = max_chars // 4
+    sample_size = max_chars - head_size - tail_size
+
+    head = raw_text[:head_size]
+    tail = raw_text[-tail_size:]
+
+    # Sample from middle: evenly-spaced paragraph excerpts
+    middle = raw_text[head_size:-tail_size]
+    paragraphs = [p.strip() for p in middle.split('\n\n') if p.strip()]
+
+    if len(paragraphs) <= 3:
+        sample = middle[:sample_size]
+    else:
+        # Take evenly-spaced paragraphs to cover the full range
+        step = max(1, len(paragraphs) // 5)
+        sampled_paras = paragraphs[::step][:8]
+        sample = '\n\n'.join(sampled_paras)
+        if len(sample) > sample_size:
+            sample = sample[:sample_size]
+
+    return (
+        head
+        + '\n\n[... middle sections summarized from chapter headings ...]\n\n'
+        + sample
+        + '\n\n[... remaining chapters covering advanced topics ...]\n\n'
+        + tail
+    )
+
+
+# ═══════════════════════════════════════════════════════════════
 # PROVIDER ROUTING — text-only LLM calls
 # ═══════════════════════════════════════════════════════════════
 
@@ -294,15 +341,19 @@ def _pdf_ocr(data: bytes) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════
-# COURSE STRUCTURE (PASS 1) — uses configured text provider
+# COURSE STRUCTURE (PASS 1) — uses smart sampling + text provider
 # ═══════════════════════════════════════════════════════════════
 
 def generate_structure_preview(raw_text: str, topic_hint: str = "") -> dict:
     """Step 1: Generate course structure (titles + slugs only, no content).
 
     Returns dict with course info and modules/lessons structure for preview.
+    Uses smart text sampling to stay under free tier token limits.
     Uses the configured AI text provider (Gemini, OpenAI, Groq, etc.)
     """
+    # Smart sample to stay under free tier limits (Groq: 12K TPM)
+    sampled = _sample_text(raw_text, max_chars=8000)
+
     prompt = f"""Analyze this educational content and create a course outline.
 
 Output ONLY this exact JSON format (no other text):
@@ -342,9 +393,10 @@ Rules: 4-8 modules, 2-4 lessons each. lowercase-hyphenated slugs.
 
 Additional context: {topic_hint}
 
-Content to analyze (first 15000 chars):
-{raw_text[:15000]}"""
+Content to analyze (smart-sampled from {len(raw_text)} total chars):
+{sampled}"""
 
+    logger.info("preview.prompt_size", total_chars=len(raw_text), sampled_chars=len(sampled))
     resp = _call_text_llm(prompt, max_tokens=8192)
     result = _parse_json(resp)
     logger.info("preview_generated", course=result.get("course", {}).get("title"))
