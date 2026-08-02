@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, text
 from app.database import get_db
@@ -12,11 +12,9 @@ from app.schemas import (
     AdminDashboardStats, PaginatedResponse,
     CourseCreate, CourseUpdate, CourseResponse,
     UserResponse, FeatureFlag as FeatureFlagSchema,
-    AICourseGenerateRequest, AICourseGenerateResponse,
     AICourseImportRequest, AICourseImportResponse,
 )
 from app.utils.deps import require_admin, require_superadmin
-from app.services.ai_content import extract_text_from_bytes, generate_course_structure
 from app.models import User as UserModel
 from uuid import UUID, uuid4
 from datetime import datetime, timezone, timedelta, date
@@ -88,27 +86,20 @@ async def admin_list_users(
             UserModel.username.ilike(f"%{search}%") |
             UserModel.display_name.ilike(f"%{search}%")
         )
-
     count_query = select(func.count(UserModel.id)).where(UserModel.deleted_at.is_(None))
-
     total = (await db.execute(count_query)).scalar()
     result = await db.execute(
         query.order_by(UserModel.created_at.desc()).offset((page - 1) * size).limit(size)
     )
-
     return PaginatedResponse(
         items=[UserResponse.model_validate(u) for u in result.scalars().all()],
-        total=total,
-        page=page,
-        size=size,
-        pages=(total + size - 1) // size,
+        total=total, page=page, size=size, pages=(total + size - 1) // size,
     )
 
 
 @router.patch("/users/{user_id}/role")
 async def update_user_role(
-    user_id: UUID,
-    role: str = Query(...),
+    user_id: UUID, role: str = Query(...),
     admin_user: UserModel = Depends(require_superadmin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -116,13 +107,11 @@ async def update_user_role(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
     from app.models import UserRole
     try:
         user.role = UserRole(role)
     except ValueError:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
-
     return {"detail": f"User role updated to {role}"}
 
 
@@ -156,20 +145,14 @@ async def admin_list_courses(
             query = query.where(Course.status == ContentStatus(status))
         except ValueError:
             pass
-
     count_query = select(func.count(Course.id)).where(Course.deleted_at.is_(None))
-
     total = (await db.execute(count_query)).scalar()
     result = await db.execute(
         query.order_by(Course.updated_at.desc()).offset((page - 1) * size).limit(size)
     )
-
     return PaginatedResponse(
         items=[CourseResponse.model_validate(c) for c in result.scalars().all()],
-        total=total,
-        page=page,
-        size=size,
-        pages=(total + size - 1) // size,
+        total=total, page=page, size=size, pages=(total + size - 1) // size,
     )
 
 
@@ -187,8 +170,7 @@ async def list_feature_flags(
 
 @router.patch("/feature-flags/{flag_name}")
 async def toggle_feature_flag(
-    flag_name: str,
-    is_enabled: bool = Query(...),
+    flag_name: str, is_enabled: bool = Query(...),
     admin_user: UserModel = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -208,8 +190,6 @@ async def analytics_overview(
     db: AsyncSession = Depends(get_db),
 ):
     now = datetime.now(timezone.utc)
-
-    # Daily signups (last 30 days)
     signups = []
     for i in range(30):
         day = now - timedelta(days=i)
@@ -217,98 +197,106 @@ async def analytics_overview(
         day_end = day_start + timedelta(days=1)
         count = (await db.execute(
             select(func.count(UserModel.id)).where(
-                UserModel.created_at >= day_start,
-                UserModel.created_at < day_end,
+                UserModel.created_at >= day_start, UserModel.created_at < day_end,
             )
         )).scalar() or 0
         signups.append({"date": day_start.date().isoformat(), "count": count})
-
-    # Course popularity
     course_stats = await db.execute(
         select(Course.title, Course.enrollment_count)
         .where(Course.status == ContentStatus.PUBLISHED, Course.deleted_at.is_(None))
-        .order_by(Course.enrollment_count.desc())
-        .limit(10)
+        .order_by(Course.enrollment_count.desc()).limit(10)
     )
     popular_courses = [{"title": row[0], "enrollments": row[1]} for row in course_stats.all()]
-
-    return {
-        "daily_signups": list(reversed(signups)),
-        "popular_courses": popular_courses,
-    }
+    return {"daily_signups": list(reversed(signups)), "popular_courses": popular_courses}
 
 
-# ── AI Content Generation ───────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════
+# AI CONTENT GENERATION
+# Flow: Upload → Extract → Preview → [Admin Approves] → Import
+# ══════════════════════════════════════════════════════════════════
 
-@router.post("/ai/extract", response_model=dict)
-async def ai_extract_content(
+@router.post("/ai/preview")
+async def ai_preview(
     file: UploadFile = File(...),
     topic: str = Query(default=""),
     admin_user: UserModel = Depends(require_admin),
 ):
-    """Upload a file (PDF/image/text) and extract structured course content with AI."""
-    try:
-        data = await file.read()
-        # Extract raw text from file
-        raw_text = extract_text_from_bytes(data, file.filename or "")
-        if not raw_text.strip():
-            raise HTTPException(status_code=400, detail="Could not extract text from file")
-        logger.info("ai_extract.text_extracted", filename=file.filename, text_len=len(raw_text))
+    """Step 1: Upload file → extract text → AI generates course structure preview.
+    Returns structure with module/lesson titles for admin review."""
+    from app.services.ai_content import extract_text, generate_structure_preview
 
-        # Generate course structure with AI
-        result = generate_course_structure(raw_text, topic)
-        logger.info("ai_extract.structure_generated", course_title=result.get("course", {}).get("title"))
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
 
-        return {
-            "success": True,
-            "filename": file.filename,
-            "extracted_length": len(raw_text),
-            "extracted_preview": raw_text[:2000],
-            "course_data": result,
-            "preview": _format_preview(result),
-        }
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        logger.error("ai_extract.error", error=str(e), filename=file.filename)
-        raise HTTPException(status_code=500, detail=f"AI processing failed: {str(e)}")
+    logger.info("ai.preview.start", file=file.filename, size=len(data))
+
+    raw_text = extract_text(data, file.filename or "")
+    if not raw_text or len(raw_text.strip()) < 50:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Could not extract enough text from this file. Extracted {len(raw_text)} characters. Try a text-based PDF or image."
+        )
+    logger.info("ai.preview.extracted", text_len=len(raw_text))
+
+    structure = generate_structure_preview(raw_text, topic)
+
+    mod_count = len(structure.get("modules", []))
+    les_count = sum(len(m.get("lessons", [])) for m in structure.get("modules", []))
+
+    return {
+        "success": True,
+        "text_length": len(raw_text),
+        "text_preview": raw_text[:1500],
+        "structure": structure,
+        "summary": {
+            "title": structure.get("course", {}).get("title", ""),
+            "modules": mod_count,
+            "lessons": les_count,
+            "difficulty": structure.get("course", {}).get("difficulty", ""),
+            "description": structure.get("course", {}).get("description", ""),
+            "skill_tags": structure.get("course", {}).get("skill_tags", []),
+        },
+        "modules_preview": [
+            {
+                "title": m.get("title", ""),
+                "lessons": [l.get("title", "") for l in m.get("lessons", [])]
+            }
+            for m in structure.get("modules", [])
+        ],
+    }
 
 
 @router.post("/ai/import", response_model=AICourseImportResponse)
 async def ai_import_course(
-    data: AICourseImportRequest,
+    structure: dict = Body(...),
     admin_user: UserModel = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Import AI-generated course data into the database."""
-    course_data = data.course_data
-    c = course_data.get("course", {})
-    modules_data = course_data.get("modules", [])
+    """Step 2: Admin approved the structure → generate lesson content via AI → import into DB."""
+    from app.services.ai_content import generate_lesson_content
 
-    # Check slug uniqueness
-    slug = c.get("slug", "")
+    c = structure.get("course", {})
+    modules_data = structure.get("modules", [])
+
+    if not c or not modules_data:
+        raise HTTPException(status_code=400, detail="Missing course or modules in structure")
+
+    slug = c.get("slug", "ai-course")
     existing = await db.execute(select(Course).where(Course.slug == slug))
     if existing.scalar_one_or_none():
         slug = f"{slug}-{uuid4().hex[:6]}"
 
-    # Create course
     course = Course(
-        id=uuid4(),
-        title=c.get("title", "Untitled Course"),
-        slug=slug,
-        description=c.get("description", ""),
-        long_description=c.get("long_description", ""),
+        id=uuid4(), title=c.get("title", "Course"), slug=slug,
+        description=c.get("description", ""), long_description=c.get("long_description", ""),
         difficulty=DifficultyLevel(c.get("difficulty", "beginner")),
-        estimated_duration_minutes=c.get("estimated_duration_minutes", 1200),
+        estimated_duration_minutes=c.get("estimated_duration_minutes", 600),
         learning_objectives=c.get("learning_objectives", []),
         skill_tags=c.get("skill_tags", []),
-        status=ContentStatus.DRAFT,
-        is_featured=False,
-        is_free=True,
+        status=ContentStatus.DRAFT, is_featured=False, is_free=True,
         author_id=admin_user.id,
-        enrollment_count=0,
-        rating_average=0.0,
-        rating_count=0,
+        enrollment_count=0, rating_average=0.0, rating_count=0,
         module_count=len(modules_data),
         lesson_count=sum(len(m.get("lessons", [])) for m in modules_data),
     )
@@ -317,33 +305,44 @@ async def ai_import_course(
 
     total_lessons = 0
     total_exercises = 0
+    course_title = c.get("title", "Course")
 
     for mi, mod in enumerate(modules_data):
         module = Module(
-            id=uuid4(),
-            course_id=course.id,
+            id=uuid4(), course_id=course.id,
             title=mod.get("title", f"Module {mi+1}"),
             slug=mod.get("slug", f"module-{mi+1}"),
             description=mod.get("description", ""),
-            display_order=mi + 1,
-            lesson_count=len(mod.get("lessons", [])),
+            display_order=mi+1, lesson_count=len(mod.get("lessons", [])),
         )
         db.add(module)
         await db.flush()
 
         for li, les in enumerate(mod.get("lessons", [])):
+            logger.info("ai.import.lesson", mod=mi+1, les=li+1, title=les.get("title"))
+
+            try:
+                content = generate_lesson_content(
+                    course_title, mod.get("title", ""), les.get("title", "")
+                )
+            except Exception as e:
+                logger.warning("ai.import.gen_failed", title=les.get("title"), error=str(e))
+                content = {
+                    "content_markdown": f"# {les.get('title')}\n\nContent generating...",
+                    "exercises": [],
+                }
+
             lesson = Lesson(
-                id=uuid4(),
-                module_id=module.id,
-                title=les.get("title", f"Lesson {li+1}"),
+                id=uuid4(), module_id=module.id,
+                title=les.get("title", f"L{li+1}"),
                 slug=les.get("slug", f"lesson-{li+1}"),
                 description=les.get("description", ""),
-                content=les.get("content_markdown", ""),
-                content_markdown=les.get("content_markdown", ""),
+                content=content.get("content_markdown", ""),
+                content_markdown=content.get("content_markdown", ""),
                 learning_objectives=les.get("learning_objectives", []),
                 difficulty=DifficultyLevel(les.get("difficulty", "beginner")),
-                estimated_duration_minutes=les.get("estimated_duration_minutes", 45),
-                display_order=li + 1,
+                estimated_duration_minutes=les.get("estimated_duration_minutes", 30),
+                display_order=li+1,
                 skill_tags=les.get("skill_tags", []),
                 status=ContentStatus.DRAFT,
             )
@@ -351,31 +350,29 @@ async def ai_import_course(
             await db.flush()
             total_lessons += 1
 
-            for ei, ex in enumerate(les.get("exercises", [])):
+            for ei, ex in enumerate(content.get("exercises", [])):
                 try:
-                    ex_type = ExerciseType(ex.get("exercise_type", "code_completion"))
+                    et = ExerciseType(ex.get("exercise_type", "code_completion"))
                 except ValueError:
-                    ex_type = ExerciseType.CODE_COMPLETION
+                    et = ExerciseType.CODE_COMPLETION
                 try:
-                    ex_diff = ExerciseDifficulty(ex.get("difficulty", "easy"))
+                    ed = ExerciseDifficulty(ex.get("difficulty", "easy"))
                 except ValueError:
-                    ex_diff = ExerciseDifficulty.EASY
+                    ed = ExerciseDifficulty.EASY
 
                 exercise = Exercise(
-                    id=uuid4(),
-                    lesson_id=lesson.id,
-                    title=ex.get("title", f"Exercise {ei+1}"),
+                    id=uuid4(), lesson_id=lesson.id,
+                    title=ex.get("title", f"Ex {ei+1}"),
                     description=ex.get("description", ""),
                     instructions=ex.get("instructions", ""),
-                    exercise_type=ex_type,
-                    difficulty=ex_diff,
+                    exercise_type=et, difficulty=ed,
                     starter_code=ex.get("starter_code", ""),
                     solution_code=ex.get("solution_code", ""),
                     test_code=ex.get("test_code", ""),
                     hints=ex.get("hints", []),
                     skill_tags=les.get("skill_tags", []),
-                    points=ex.get("points", 15),
-                    display_order=ei + 1,
+                    points=ex.get("points", 10),
+                    display_order=ei+1,
                 )
                 db.add(exercise)
                 total_exercises += 1
@@ -383,31 +380,12 @@ async def ai_import_course(
     await db.flush()
     await db.commit()
 
-    logger.info("ai_import.success", course_slug=slug, modules=len(modules_data),
+    logger.info("ai.import.done", slug=slug, modules=len(modules_data),
                 lessons=total_lessons, exercises=total_exercises)
 
     return AICourseImportResponse(
-        course_id=course.id,
-        course_slug=slug,
+        course_id=course.id, course_slug=slug,
         module_count=len(modules_data),
         lesson_count=total_lessons,
         exercise_count=total_exercises,
     )
-
-
-def _format_preview(data: dict) -> str:
-    """Format course data into a human-readable preview."""
-    c = data.get("course", {})
-    mods = data.get("modules", [])
-    lines = [f"## {c.get('title', 'Course')}\n",
-             f"**Difficulty:** {c.get('difficulty', 'N/A')} | **Duration:** {c.get('estimated_duration_minutes', 'N/A')} min\n",
-             f"**Tags:** {', '.join(c.get('skill_tags', []))}\n",
-             f"\n{c.get('description', '')}\n",
-             "\n---\n"]
-    for mi, m in enumerate(mods):
-        lines.append(f"\n### Module {mi+1}: {m.get('title', 'Module')}")
-        for li, l in enumerate(m.get("lessons", [])):
-            lines.append(f"  - Lesson {li+1}: {l.get('title', 'Lesson')} ({l.get('difficulty', 'N/A')}) "
-                        f"[{len(l.get('exercises', []))} exercises]")
-    return "\n".join(lines)
-

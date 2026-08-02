@@ -1,8 +1,7 @@
-"""AI-powered content extraction and course generation for DSir admin.
+"""AI content extraction and course generation — bulletproof edition.
 
-Uses Google Gemini 2.0 Flash REST API directly.
-Two-pass chunking: structure first, then each lesson individually.
-Handles books of ANY size including image-based/scanned PDFs."""
+Uses Gemini 2.0 Flash REST API. Handles any file type including scanned/handwritten.
+Flow: extract → preview (structure) → approve → generate content → import"""
 import base64
 import json
 import io
@@ -16,23 +15,22 @@ from app.config import get_settings
 settings = get_settings()
 logger = structlog.get_logger()
 
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 
-def _call_gemini(prompt: str, image_data: Optional[dict] = None, max_tokens: int = 8192) -> str:
-    """Call Gemini REST API directly. Returns text response."""
-    url = f"{GEMINI_API_URL}?key={settings.GEMINI_API_KEY}"
+def _gemini(prompt: str, image: Optional[dict] = None, max_tokens: int = 4096) -> str:
+    """Call Gemini API. Returns text or raises with clear message."""
     if not settings.GEMINI_API_KEY:
-        raise RuntimeError("GEMINI_API_KEY not configured. Set it in Render environment variables.")
+        raise RuntimeError("GEMINI_API_KEY not set in environment")
 
     parts = []
-    if image_data:
-        parts.append({"inline_data": {"mime_type": image_data["mime_type"], "data": image_data["data"]}})
+    if image:
+        parts.append({"inline_data": {"mime_type": image["mime"], "data": image["data"]}})
     parts.append({"text": prompt})
 
-    payload = {
+    body = {
         "contents": [{"parts": parts}],
-        "generationConfig": {"temperature": 0.3, "maxOutputTokens": max_tokens, "topP": 0.95},
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": max_tokens},
         "safetySettings": [
             {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
             {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
@@ -41,235 +39,249 @@ def _call_gemini(prompt: str, image_data: Optional[dict] = None, max_tokens: int
         ],
     }
 
-    try:
-        resp = httpx.post(url, json=payload, timeout=180.0)
-        resp.raise_for_status()
-        data = resp.json()
-        if "candidates" not in data or not data["candidates"]:
-            reason = data.get("promptFeedback", {}).get("blockReason", "unknown")
-            raise RuntimeError(f"Gemini blocked: {reason}")
-        candidate = data["candidates"][0]
-        if candidate.get("finishReason") == "SAFETY":
-            raise RuntimeError("Gemini blocked by safety filter")
-        parts = candidate.get("content", {}).get("parts", [])
-        text = "".join(p.get("text", "") for p in parts)
-        if not text:
-            raise RuntimeError(f"Gemini empty response. finishReason={candidate.get('finishReason')}")
-        return text
-    except httpx.HTTPStatusError as e:
-        raise RuntimeError(f"Gemini HTTP {e.response.status_code}: {e.response.text[:400]}")
-    except RuntimeError:
-        raise
-    except Exception as e:
-        raise RuntimeError(f"Gemini call failed: {e}")
+    resp = httpx.post(f"{GEMINI_URL}?key={settings.GEMINI_API_KEY}", json=body, timeout=180.0)
+    if resp.status_code != 200:
+        raise RuntimeError(f"Gemini HTTP {resp.status_code}: {resp.text[:300]}")
+
+    data = resp.json()
+    candidates = data.get("candidates") or []
+
+    # Safety block
+    if not candidates:
+        fb = data.get("promptFeedback", {})
+        reason = fb.get("blockReason", "unknown")
+        if fb.get("safetyRatings"):
+            reasons = [f"{s['category']}={s['probability']}" for s in fb["safetyRatings"]]
+            reason = ", ".join(reasons)
+        raise RuntimeError(f"Gemini blocked response: {reason}")
+
+    cand = candidates[0]
+    finish = cand.get("finishReason", "STOP")
+    if finish not in ("STOP", "MAX_TOKENS"):
+        raise RuntimeError(f"Gemini finish reason: {finish}")
+
+    text = "".join(p.get("text", "") for p in cand.get("content", {}).get("parts", []))
+    if not text:
+        raise RuntimeError(f"Gemini returned empty text (finish={finish})")
+
+    logger.info("gemini_call.ok", prompt_len=len(prompt), response_len=len(text), finish=finish)
+    return text
 
 
-# ── File Processing ───────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════
+# FILE EXTRACTION
+# ═══════════════════════════════════════════════════════════════
 
-def extract_text_from_bytes(data: bytes, filename: str = "") -> str:
-    """Extract text from file. Falls back to Gemini Vision for image-based PDFs."""
+def extract_text(data: bytes, filename: str = "") -> str:
+    """Extract text from any file. Falls back to Gemini OCR for images/scanned PDFs."""
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else "txt"
 
-    # PDF — try pdfplumber, then PyPDF2, then Gemini Vision
     if ext == "pdf":
-        text = ""
-        try:
-            import pdfplumber
-            with pdfplumber.open(io.BytesIO(data)) as pdf:
-                pages = [p.extract_text() or "" for p in pdf.pages]
-            text = "\n\n".join(pages).strip()
-        except ImportError:
-            pass
-        if not text:
-            try:
-                import PyPDF2
-                reader = PyPDF2.PdfReader(io.BytesIO(data))
-                text = "\n\n".join((p.extract_text() or "") for p in reader.pages).strip()
-            except ImportError:
-                pass
-        if text:
+        text = _pdf_extract(data)
+        if text and len(text) > 100:
             return text
-        # Image-based PDF — OCR via Gemini Vision
-        logger.info("ai_content.pdf_image_based", filename=filename)
-        return _ocr_pdf_via_gemini(data)
+        # Image-based PDF — OCR each page
+        logger.info("extract.pdf_ocr_fallback", filename=filename)
+        return _pdf_ocr(data)
 
-    # Images
-    if ext in ("png", "jpg", "jpeg", "gif", "webp", "bmp", "tiff"):
-        return _ocr_with_gemini(data, ext)
+    if ext in ("png", "jpg", "jpeg", "webp", "bmp", "tiff", "gif"):
+        mime = f"image/{ext}" if ext != "jpg" else "image/jpeg"
+        return _gemini("Transcribe all text from this image verbatim. Include code, headings, lists exactly. Output ONLY the extracted text.",
+                       image={"mime": mime, "data": base64.b64encode(data).decode()})
 
-    # Text
     try:
         return data.decode("utf-8")
     except UnicodeDecodeError:
-        return data.decode("latin-1")
+        return data.decode("latin-1", errors="replace")
 
 
-def _ocr_pdf_via_gemini(data: bytes) -> str:
-    """Use Gemini Vision to OCR an image-based PDF page by page."""
-    try:
-        import pdfplumber
-    except ImportError:
-        raise RuntimeError("pdfplumber required for PDF processing")
+def _pdf_extract(data: bytes) -> str:
+    """Try pdfplumber, then PyPDF2."""
+    for lib in ("pdfplumber", "pypdf2"):
+        try:
+            if lib == "pdfplumber":
+                import pdfplumber
+                import warnings
+                warnings.filterwarnings("ignore")
+                with pdfplumber.open(io.BytesIO(data)) as pdf:
+                    pages = [p.extract_text() or "" for p in pdf.pages]
+                return "\n\n".join(pages).strip()
+            else:
+                import PyPDF2
+                reader = PyPDF2.PdfReader(io.BytesIO(data))
+                return "\n\n".join((p.extract_text() or "") for p in reader.pages).strip()
+        except Exception:
+            continue
+    return ""
+
+
+def _pdf_ocr(data: bytes) -> str:
+    """OCR PDF by converting each page to image and sending to Gemini."""
+    import pdfplumber
+    import warnings
+    warnings.filterwarnings("ignore")
     from PIL import Image
 
+    texts = []
     with pdfplumber.open(io.BytesIO(data)) as pdf:
-        all_text = []
-        for i, page in enumerate(pdf.pages[:20]):  # Max 20 pages for OCR
-            img = page.to_image(resolution=150)
-            img_bytes = io.BytesIO()
-            img.original.save(img_bytes, format="PNG")
-            img_b64 = base64.b64encode(img_bytes.getvalue()).decode()
+        for i, page in enumerate(pdf.pages[:25]):
             try:
-                page_text = _call_gemini(
-                    "Extract ALL text from this textbook page verbatim. Include headings, code, bullet points exactly.",
-                    image_data={"mime_type": "image/png", "data": img_b64},
+                img = page.to_image(resolution=150)
+                buf = io.BytesIO()
+                img.original.save(buf, format="PNG")
+                b64 = base64.b64encode(buf.getvalue()).decode()
+                t = _gemini(
+                    "Extract ALL text from this page verbatim. Include code, headings, lists exactly as they appear.",
+                    image={"mime": "image/png", "data": b64},
                     max_tokens=4096,
                 )
-                all_text.append(page_text)
-                logger.info("ai_content.ocr_page", page=i+1)
+                texts.append(t)
+                logger.info("ocr_page", page=i+1, chars=len(t))
             except Exception as e:
-                logger.warning("ai_content.ocr_page_failed", page=i+1, error=str(e))
-        return "\n\n".join(all_text)
+                logger.warning("ocr_page_failed", page=i+1, error=str(e)[:100])
+    return "\n\n".join(texts)
 
 
-def _ocr_with_gemini(data: bytes, ext: str) -> str:
-    """OCR a single image via Gemini Vision."""
-    mime = f"image/{ext}" if ext != "jpg" else "image/jpeg"
-    return _call_gemini(
-        "Extract ALL text from this image verbatim. Include headings, code blocks, bullet points exactly as they appear. Do not summarize. Output ONLY the text.",
-        image_data={"mime_type": mime, "data": base64.b64encode(data).decode()},
-    )
+# ═══════════════════════════════════════════════════════════════
+# COURSE STRUCTURE (PASS 1)
+# ═══════════════════════════════════════════════════════════════
 
+def generate_structure_preview(raw_text: str, topic_hint: str = "") -> dict:
+    """Step 1: Generate course structure (titles + slugs only, no content).
 
-# ── TWO-PASS COURSE GENERATION ────────────────────────────────
+    Returns dict with course info and modules/lessons structure for preview.
+    """
+    prompt = f"""Analyze this educational content and create a course outline.
 
-STRUCTURE_PROMPT = """Analyze this content and design a course STRUCTURE. Output ONLY valid JSON.
-
-JSON format:
-```json
-{
-  "course": {
+Output ONLY this exact JSON format (no other text):
+{{
+  "course": {{
     "title": "Course Title",
     "slug": "course-slug",
-    "description": "2-sentence summary",
-    "long_description": "Detailed paragraph",
+    "description": "Brief description (1-2 sentences)",
+    "long_description": "What students will learn (paragraph)",
     "difficulty": "beginner",
     "estimated_duration_minutes": 600,
-    "skill_tags": ["tag1"],
-    "learning_objectives": ["obj1"]
-  },
+    "skill_tags": ["python", "programming"],
+    "learning_objectives": ["Master Python basics"]
+  }},
   "modules": [
-    {
-      "title": "Module Title",
-      "slug": "module-slug",
-      "description": "Brief summary",
+    {{
+      "title": "01. Getting Started",
+      "slug": "getting-started",
+      "description": "Module description",
       "display_order": 1,
       "lessons": [
-        {
-          "title": "Lesson Title",
+        {{
+          "title": "Lesson Name",
           "slug": "lesson-slug",
-          "description": "One line",
+          "description": "What this covers",
           "difficulty": "beginner",
           "estimated_duration_minutes": 30,
-          "skill_tags": ["tag"],
-          "learning_objectives": ["obj"]
-        }
+          "skill_tags": ["basics"],
+          "learning_objectives": ["Understand X"]
+        }}
       ]
-    }
+    }}
   ]
-}
-```
+}}
 
-Rules: 3-7 modules, 2-4 lessons each. Slugs: lowercase-hyphens. JSON only.
+Rules: 4-8 modules, 2-4 lessons each. lowercase-hyphenated slugs.
 
-Content:
-{content}"""
+Additional context: {topic_hint}
 
-LESSON_PROMPT = """Write a COMPLETE programming lesson. Output ONLY this JSON:
+Content to analyze (first 15000 chars):
+{raw_text[:15000]}"""
 
-```json
-{
-  "content_markdown": "## Section\\n\\nFull markdown with ```python code```",
+    resp = _gemini(prompt, max_tokens=8192)
+    result = _parse_json(resp)
+    logger.info("preview_generated", course=result.get("course", {}).get("title"))
+    return result
+
+
+def generate_lesson_content(course_title: str, module_title: str, lesson_title: str) -> dict:
+    """Step 2: Generate full content + exercises for a single lesson."""
+    prompt = f"""Write a programming lesson. Output ONLY this JSON:
+
+{{
+  "content_markdown": "## Section Title\\n\\nParagraph text with **bold** and *italic*.\\n\\n```python\\nprint('code example')\\n```\\n\\n## Practice\\n\\nExercise instructions...",
   "exercises": [
-    {
-      "title": "Practice: Name",
-      "description": "Tests what",
-      "instructions": "The task",
+    {{
+      "title": "Practice: Exercise Name",
+      "description": "What student practices",
+      "instructions": "Complete this task...",
       "exercise_type": "code_completion",
       "difficulty": "easy",
-      "starter_code": "# TODO",
-      "solution_code": "# solution",
-      "test_code": "assert True",
-      "hints": [{"level": 1, "content": "Hint"}],
+      "starter_code": "# Write your code here\\n",
+      "solution_code": "# Solution\\n",
+      "test_code": "pass",
+      "hints": [{{"level": 1, "content": "Try thinking about..."}}],
       "points": 10
-    }
+    }}
   ]
-}
-```
+}}
 
 Requirements:
-- 300-500 words of markdown with ## sections
-- At least 2 ```python blocks with runnable examples
-- 1-2 exercises per lesson
-- "Practice Exercise" section at end
-- Slug: lowercase-with-hyphens
+- content_markdown: 300-500 words, 2+ ```python blocks, ## headers, Practice section
+- 1-2 exercises with starter/solution code
+- Valid JSON only, no trailing commas
 
-Topic: {title}
 Course: {course_title}
 Module: {module_title}
+Lesson: {lesson_title}"""
 
-JSON only. No other text."""
-
-
-def generate_course_structure(raw_content: str, course_hint: str = "") -> dict:
-    """Two-pass: structure first, then generate each lesson individually."""
-    # PASS 1: Structure outline
-    prompt = STRUCTURE_PROMPT.format(content=raw_content[:20000])
-    if course_hint:
-        prompt += f"\n\nTopic context: {course_hint}"
-    logger.info("ai_content.pass1.start", content_len=len(raw_content))
-    resp = _call_gemini(prompt, max_tokens=4096)
-    structure = _parse_json(resp, "structure")
-    course_title = structure.get("course", {}).get("title", "Course")
-    total_lessons = sum(len(m.get("lessons", [])) for m in structure.get("modules", []))
-    logger.info("ai_content.pass1.done", course=course_title, modules=len(structure.get("modules", [])), lessons=total_lessons)
-
-    # PASS 2: Each lesson
-    filled = 0
-    for mod in structure.get("modules", []):
-        for les in mod.get("lessons", []):
-            filled += 1
-            logger.info("ai_content.pass2.lesson", progress=f"{filled}/{total_lessons}", title=les.get("title"))
-            try:
-                r = _call_gemini(LESSON_PROMPT.format(title=les.get("title", ""), course_title=course_title, module_title=mod.get("title", "")), max_tokens=4096)
-                d = _parse_json(r, f"lesson:{les.get('title')}")
-                les["content_markdown"] = d.get("content_markdown", "")
-                les["exercises"] = d.get("exercises", [])
-            except Exception as e:
-                logger.warning("ai_content.pass2.failed", lesson=les.get("title"), error=str(e))
-                les["content_markdown"] = f"# {les.get('title')}\n\nContent generation encountered an error: {e}"
-                les["exercises"] = []
-    return structure
+    resp = _gemini(prompt, max_tokens=4096)
+    return _parse_json(resp)
 
 
-def _parse_json(text: str, ctx: str = "") -> dict:
-    """Multi-strategy JSON extraction."""
-    if not text or not text.strip():
-        raise ValueError(f"[{ctx}] Empty response")
-    # Direct
+# ═══════════════════════════════════════════════════════════════
+# JSON PARSING (bulletproof)
+# ═══════════════════════════════════════════════════════════════
+
+def _parse_json(text: str) -> dict:
+    """Extract JSON from any AI response. Multiple strategies."""
+    text = text.strip()
+    if not text:
+        raise ValueError("Empty AI response")
+
+    logger.info("parse_json.start", preview=text[:200])
+
+    # Strategy 1: direct
     try:
         return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    # Fence
-    m = re.search(r'```(?:json)?\s*\n?([\s\S]*?)\n?```', text)
-    if m:
-        try:
-            return json.loads(m.group(1).strip())
-        except json.JSONDecodeError:
-            pass
-    # Balanced braces
-    depth = start = 0
+    except json.JSONDecodeError as e:
+        logger.info("parse_json.direct_failed", error=str(e)[:100])
+
+    # Strategy 2: extract from ```json or ``` fences
+    for pat in [r'```json\s*\n([\s\S]*?)\n```', r'```\s*\n([\s\S]*?)\n```']:
+        m = re.search(pat, text)
+        if m:
+            try:
+                return json.loads(m.group(1).strip())
+            except json.JSONDecodeError:
+                pass
+
+    # Strategy 3: find outermost balanced { } pair
+    depth = 0
+    best_start = -1
+    for i, ch in enumerate(text):
+        if ch == '{':
+            if depth == 0:
+                best_start = i
+            depth += 1
+        elif ch == '}':
+            depth -= 1
+            if depth == 0 and best_start >= 0:
+                try:
+                    candidate = text[best_start:i+1]
+                    return json.loads(candidate)
+                except json.JSONDecodeError:
+                    best_start = -1
+
+    # Strategy 4: try the largest chunk between { and }
+    chunks = []
+    depth = 0
+    start = -1
     for i, ch in enumerate(text):
         if ch == '{':
             if depth == 0:
@@ -278,16 +290,25 @@ def _parse_json(text: str, ctx: str = "") -> dict:
         elif ch == '}':
             depth -= 1
             if depth == 0 and start >= 0:
-                try:
-                    return json.loads(text[start:i+1])
-                except json.JSONDecodeError:
-                    continue
-    # Per-line
-    for line in text.split('\n'):
-        line = line.strip()
-        if line.startswith('{') and line.endswith('}'):
-            try:
-                return json.loads(line)
-            except json.JSONDecodeError:
-                continue
-    raise ValueError(f"[{ctx}] JSON parse failed. Preview: {text[:400]}")
+                chunks.append(text[start:i+1])
+                start = -1
+    # Try from largest to smallest
+    for chunk in sorted(chunks, key=len, reverse=True):
+        try:
+            return json.loads(chunk)
+        except json.JSONDecodeError:
+            continue
+
+    # Strategy 5: try to fix common JSON issues
+    for chunk in chunks:
+        try:
+            # Fix trailing commas
+            fixed = re.sub(r',\s*}', '}', chunk)
+            fixed = re.sub(r',\s*]', ']', fixed)
+            return json.loads(fixed)
+        except json.JSONDecodeError:
+            continue
+
+    # All strategies failed — log the full response for debugging
+    logger.error("parse_json.all_failed", full_response=text[:3000])
+    raise ValueError(f"Could not parse AI response as JSON. First 200 chars: {text[:200]}")

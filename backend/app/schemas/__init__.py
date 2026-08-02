@@ -585,15 +585,6 @@ class SearchResult(BaseModel):
 
 # ── Admin AI ────────────────────────────────────────────────────
 
-class AICourseGenerateRequest(BaseModel):
-    topic: str = Field(default="", description="Topic hint for course generation")
-
-
-class AICourseGenerateResponse(BaseModel):
-    course_data: dict
-    preview: str
-
-
 class AICourseImportRequest(BaseModel):
     course_data: dict
 
