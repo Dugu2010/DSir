@@ -112,14 +112,21 @@ export default function CoursesPage() {
       {/* Search + Filters */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="flex-1">
+          <div className="flex-1 relative">
             <Input
               placeholder="Search courses by title or topic..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               leftIcon={<Search className="h-4 w-4" />}
-              rightIcon={search ? <button onClick={() => { setSearch(""); setDebouncedSearch(""); }}><X className="h-4 w-4" /></button> : undefined}
             />
+            {search && (
+              <button
+                onClick={() => { setSearch(""); setDebouncedSearch(""); }}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9ca3af] hover:text-[#6b7280] dark:hover:text-white transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
           <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} leftIcon={<SlidersHorizontal className="h-4 w-4" />}>
             Filters{hasActiveFilters && <span className="ml-1.5 h-2 w-2 rounded-full bg-brand-500" />}
@@ -240,8 +247,6 @@ export default function CoursesPage() {
     </div>
   );
 }
-
-// Sub-components
 
 function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
