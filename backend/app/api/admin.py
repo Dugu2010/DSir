@@ -1,6 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Body, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, text
+from sqlalchemy import select, func, text, delete
 from app.database import get_db
 from app.models import (
     User, Course, Module, Lesson, Exercise, Enrollment,
@@ -18,14 +18,16 @@ from app.utils.deps import require_admin, require_superadmin
 from app.models import User as UserModel
 from uuid import UUID, uuid4
 from datetime import datetime, timezone, timedelta, date
-import structlog
+import structlog, asyncio
 
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
 
-# -- Dashboard Stats --
+# ================================================================
+# DASHBOARD
+# ================================================================
 
 @router.get("/dashboard", response_model=AdminDashboardStats)
 async def admin_dashboard(
@@ -34,7 +36,6 @@ async def admin_dashboard(
 ):
     now = datetime.now(timezone.utc)
     week_ago = now - timedelta(days=7)
-    today = date.today()
 
     total_users = (await db.execute(select(func.count(UserModel.id)).where(UserModel.deleted_at.is_(None)))).scalar() or 0
     total_courses = (await db.execute(
@@ -60,16 +61,15 @@ async def admin_dashboard(
     )).scalar() or 0
 
     return AdminDashboardStats(
-        total_users=total_users,
-        total_courses=total_courses,
-        total_enrollments=total_enrollments,
-        total_completions=total_completions,
-        active_today=active_today,
-        new_users_week=new_users_week,
+        total_users=total_users, total_courses=total_courses,
+        total_enrollments=total_enrollments, total_completions=total_completions,
+        active_today=active_today, new_users_week=new_users_week,
     )
 
 
-# -- User Management --
+# ================================================================
+# USER MANAGEMENT
+# ================================================================
 
 @router.get("/users", response_model=PaginatedResponse)
 async def admin_list_users(
@@ -129,7 +129,9 @@ async def admin_delete_user(
     return {"detail": "User deleted"}
 
 
-# -- Course Management (Admin) --
+# ================================================================
+# COURSE MANAGEMENT
+# ================================================================
 
 @router.get("/courses", response_model=PaginatedResponse)
 async def admin_list_courses(
@@ -156,7 +158,40 @@ async def admin_list_courses(
     )
 
 
-# -- Feature Flags --
+@router.delete("/courses/{course_id}")
+async def admin_delete_course(
+    course_id: UUID,
+    admin_user: UserModel = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft-delete a course and all its modules, lessons, and exercises."""
+    result = await db.execute(select(Course).where(Course.id == course_id, Course.deleted_at.is_(None)))
+    course = result.scalar_one_or_none()
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+    
+    now = datetime.now(timezone.utc)
+    course.deleted_at = now
+    
+    # Cascade soft-delete modules, lessons, exercises
+    modules = await db.execute(select(Module).where(Module.course_id == course_id))
+    for mod in modules.scalars().all():
+        mod.deleted_at = now
+        lessons = await db.execute(select(Lesson).where(Lesson.module_id == mod.id))
+        for les in lessons.scalars().all():
+            les.deleted_at = now
+            exercises = await db.execute(select(Exercise).where(Exercise.lesson_id == les.id))
+            for ex in exercises.scalars().all():
+                ex.deleted_at = now
+    
+    await db.commit()
+    logger.info("admin.course.deleted", course_slug=course.slug)
+    return {"detail": f"Course '{course.title}' deleted"}
+
+
+# ================================================================
+# FEATURE FLAGS
+# ================================================================
 
 @router.get("/feature-flags")
 async def list_feature_flags(
@@ -182,7 +217,9 @@ async def toggle_feature_flag(
     return {"name": flag.name, "is_enabled": flag.is_enabled}
 
 
-# -- Analytics --
+# ================================================================
+# ANALYTICS
+# ================================================================
 
 @router.get("/analytics/overview")
 async def analytics_overview(
@@ -211,8 +248,8 @@ async def analytics_overview(
 
 
 # ================================================================
-# AI CONTENT GENERATION
-# Flow: Upload -> Extract -> Preview -> [Admin Approves] -> Import
+# AI CONTENT GENERATION (ASYNC)
+# Flow: Upload -> Extract -> Preview -> [Approve] -> Instant Save -> Background Generate
 # ================================================================
 
 @router.post("/ai/preview")
@@ -221,8 +258,7 @@ async def ai_preview(
     topic: str = Query(default=""),
     admin_user: UserModel = Depends(require_admin),
 ):
-    """Step 1: Upload file -> extract text -> AI generates course structure preview.
-    Returns structure with module/lesson titles for admin review."""
+    """Step 1: Upload -> extract -> AI preview. Takes ~30-60s."""
     from app.services.ai_content import extract_text, generate_structure_preview
 
     data = await file.read()
@@ -235,7 +271,7 @@ async def ai_preview(
     if not raw_text or len(raw_text.strip()) < 50:
         raise HTTPException(
             status_code=400,
-            detail=f"Could not extract enough text from this file. Extracted {len(raw_text)} characters. Try a text-based PDF or image."
+            detail=f"Could not extract enough text. Extracted {len(raw_text)} chars."
         )
     logger.info("ai.preview.extracted", text_len=len(raw_text))
 
@@ -251,8 +287,7 @@ async def ai_preview(
         "structure": structure,
         "summary": {
             "title": structure.get("course", {}).get("title", ""),
-            "modules": mod_count,
-            "lessons": les_count,
+            "modules": mod_count, "lessons": les_count,
             "difficulty": structure.get("course", {}).get("difficulty", ""),
             "description": structure.get("course", {}).get("description", ""),
             "skill_tags": structure.get("course", {}).get("skill_tags", []),
@@ -270,17 +305,18 @@ async def ai_preview(
 @router.post("/ai/import", response_model=AICourseImportResponse)
 async def ai_import_course(
     structure: dict = Body(...),
+    background_tasks: BackgroundTasks = Depends(),
     admin_user: UserModel = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Step 2: Admin approved the structure -> generate lesson content via AI -> import into DB."""
-    from app.services.ai_content import generate_lesson_content
+    """Step 2: SAVE COURSE INSTANTLY (PUBLISHED), return immediately.
+    Lessons generated async in background - poll /admin/ai/import/{slug}/status."""
 
     c = structure.get("course", {})
     modules_data = structure.get("modules", [])
 
     if not c or not modules_data:
-        raise HTTPException(status_code=400, detail="Missing course or modules in structure")
+        raise HTTPException(status_code=400, detail="Missing course or modules")
 
     slug = c.get("slug", "ai-course")
     existing = await db.execute(select(Course).where(Course.slug == slug))
@@ -305,7 +341,6 @@ async def ai_import_course(
     await db.flush()
 
     total_lessons = 0
-    total_exercises = 0
     course_title = c.get("title", "Course")
 
     for mi, mod in enumerate(modules_data):
@@ -320,26 +355,13 @@ async def ai_import_course(
         await db.flush()
 
         for li, les in enumerate(mod.get("lessons", [])):
-            logger.info("ai.import.lesson", mod=mi+1, les=li+1, title=les.get("title"))
-
-            try:
-                content = generate_lesson_content(
-                    course_title, mod.get("title", ""), les.get("title", "")
-                )
-            except Exception as e:
-                logger.warning("ai.import.gen_failed", title=les.get("title"), error=str(e))
-                content = {
-                    "content_markdown": f"# {les.get('title')}\n\nContent generating...",
-                    "exercises": [],
-                }
-
             lesson = Lesson(
                 id=uuid4(), module_id=module.id,
                 title=les.get("title", f"L{li+1}"),
                 slug=les.get("slug", f"lesson-{li+1}"),
                 description=les.get("description", ""),
-                content=content.get("content_markdown", ""),
-                content_markdown=content.get("content_markdown", ""),
+                content="Generating content...",
+                content_markdown="Generating content...",
                 learning_objectives=les.get("learning_objectives", []),
                 difficulty=DifficultyLevel(les.get("difficulty", "beginner")),
                 estimated_duration_minutes=les.get("estimated_duration_minutes", 30),
@@ -348,45 +370,164 @@ async def ai_import_course(
                 status=ContentStatus.PUBLISHED,
             )
             db.add(lesson)
-            await db.flush()
             total_lessons += 1
 
-            for ei, ex in enumerate(content.get("exercises", [])):
-                try:
-                    et = ExerciseType(ex.get("exercise_type", "code_completion"))
-                except ValueError:
-                    et = ExerciseType.CODE_COMPLETION
-                try:
-                    ed = ExerciseDifficulty(ex.get("difficulty", "easy"))
-                except ValueError:
-                    ed = ExerciseDifficulty.EASY
-
-                exercise = Exercise(
-                    id=uuid4(), lesson_id=lesson.id,
-                    title=ex.get("title", f"Ex {ei+1}"),
-                    description=ex.get("description", ""),
-                    instructions=ex.get("instructions", ""),
-                    exercise_type=et, difficulty=ed,
-                    starter_code=ex.get("starter_code", ""),
-                    solution_code=ex.get("solution_code", ""),
-                    test_code=ex.get("test_code", ""),
-                    hints=ex.get("hints", []),
-                    skill_tags=les.get("skill_tags", []),
-                    points=ex.get("points", 10),
-                    display_order=ei+1,
-                )
-                db.add(exercise)
-                total_exercises += 1
-
-    await db.flush()
     await db.commit()
 
-    logger.info("ai.import.done", slug=slug, modules=len(modules_data),
-                lessons=total_lessons, exercises=total_exercises)
+    # Fire background generation (returns instantly, course already live)
+    course_id_str = str(course.id)
+    background_tasks.add_task(_bg_generate_lessons, course_id_str, course_title, modules_data)
+
+    logger.info("ai.import.queued", slug=slug, lessons=total_lessons)
 
     return AICourseImportResponse(
         course_id=course.id, course_slug=slug,
         module_count=len(modules_data),
         lesson_count=total_lessons,
-        exercise_count=total_exercises,
+        exercise_count=0,
     )
+
+
+@router.get("/ai/import/{course_slug}/status")
+async def ai_import_status(
+    course_slug: str,
+    admin_user: UserModel = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Poll generation progress. Returns {generated, total, done, lessons}."""
+    result = await db.execute(
+        select(Course).where(Course.slug == course_slug, Course.deleted_at.is_(None))
+    )
+    course = result.scalar_one_or_none()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    # Count generated vs total lessons
+    total_result = await db.execute(
+        select(func.count(Lesson.id))
+        .join(Module).where(Module.course_id == course.id)
+    )
+    total = total_result.scalar() or 0
+
+    generated_result = await db.execute(
+        select(func.count(Lesson.id))
+        .join(Module).where(
+            Module.course_id == course.id,
+            Lesson.content_markdown != "Generating content..."
+        )
+    )
+    generated = generated_result.scalar() or 0
+
+    # Per-lesson status
+    modules_result = await db.execute(
+        select(Module).where(Module.course_id == course.id).order_by(Module.display_order)
+    )
+    lessons_status = []
+    for mod in modules_result.scalars().all():
+        lessons_result = await db.execute(
+            select(Lesson).where(Lesson.module_id == mod.id).order_by(Lesson.display_order)
+        )
+        for les in lessons_result.scalars().all():
+            lessons_status.append({
+                "id": str(les.id),
+                "title": les.title,
+                "slug": les.slug,
+                "module_title": mod.title,
+                "generated": les.content_markdown != "Generating content...",
+            })
+
+    return {
+        "generated": generated,
+        "total": total,
+        "done": generated >= total,
+        "lessons": lessons_status,
+    }
+
+
+async def _bg_generate_lessons(course_id_str: str, course_title: str, modules_data: list):
+    """Background task: generate AI content for each lesson, update DB.
+    Runs AFTER the response is sent. Each lesson takes ~15-25s (NVIDIA 120B)."""
+    from app.database import async_session_factory
+    from app.services.ai_content import generate_lesson_content
+    from app.models import Module as M, Lesson as L, Exercise as E
+    from app.models import ExerciseType as ET, ExerciseDifficulty as ED
+
+    logger.info("bg.gen.start", course=course_title, modules=len(modules_data))
+
+    async with async_session_factory() as db:
+        course_id = UUID(course_id_str)
+        generated = 0
+        failed = 0
+
+        for mod_data in modules_data:
+            mod_slug = mod_data.get("slug", "")
+            result = await db.execute(
+                select(M).where(M.course_id == course_id, M.slug == mod_slug)
+            )
+            module = result.scalar_one_or_none()
+            if not module:
+                continue
+
+            for les_data in mod_data.get("lessons", []):
+                les_slug = les_data.get("slug", "")
+                result = await db.execute(
+                    select(L).where(L.module_id == module.id, L.slug == les_slug)
+                )
+                lesson = result.scalar_one_or_none()
+                if not lesson:
+                    continue
+
+                try:
+                    # Run blocking AI call in thread pool (prevents event loop blocking)
+                    content = await asyncio.to_thread(
+                        generate_lesson_content,
+                        course_title,
+                        mod_data.get("title", ""),
+                        les_data.get("title", "")
+                    )
+
+                    md = content.get("content_markdown", "")
+                    lesson.content = md
+                    lesson.content_markdown = md
+
+                    # Replace exercises
+                    await db.execute(delete(E).where(E.lesson_id == lesson.id))
+
+                    for ei, ex in enumerate(content.get("exercises", [])):
+                        try:
+                            et = ET(ex.get("exercise_type", "code_completion"))
+                        except ValueError:
+                            et = ET.CODE_COMPLETION
+                        try:
+                            ed = ED(ex.get("difficulty", "easy"))
+                        except ValueError:
+                            ed = ED.EASY
+
+                        exercise = E(
+                            id=uuid4(), lesson_id=lesson.id,
+                            title=ex.get("title", f"Ex {ei+1}"),
+                            description=ex.get("description", ""),
+                            instructions=ex.get("instructions", ""),
+                            exercise_type=et, difficulty=ed,
+                            starter_code=ex.get("starter_code", ""),
+                            solution_code=ex.get("solution_code", ""),
+                            test_code=ex.get("test_code", ""),
+                            hints=ex.get("hints", []),
+                            skill_tags=les_data.get("skill_tags", []),
+                            points=ex.get("points", 10),
+                            display_order=ei+1,
+                        )
+                        db.add(exercise)
+
+                    await db.commit()
+                    generated += 1
+                    logger.info("bg.gen.lesson", title=les_data.get("title"), progress=f"{generated}/{len(modules_data)}")
+
+                except Exception as e:
+                    failed += 1
+                    lesson.content_markdown = f"# {les_data.get('title')}\n\nContent generation failed. Please try regenerating."
+                    lesson.content = lesson.content_markdown
+                    await db.commit()
+                    logger.warning("bg.gen.failed", title=les_data.get("title"), error=str(e)[:100])
+
+        logger.info("bg.gen.done", generated=generated, failed=failed)
