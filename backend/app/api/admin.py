@@ -302,8 +302,8 @@ async def ai_preview(
 
 @router.post("/ai/import", response_model=AICourseImportResponse)
 async def ai_import_course(
-    structure: dict = Body(...),
     background_tasks: BackgroundTasks,
+    structure: dict = Body(...),
     admin_user: UserModel = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
@@ -358,8 +358,8 @@ async def ai_import_course(
                 title=les.get("title", f"L{li+1}"),
                 slug=les.get("slug", f"lesson-{li+1}"),
                 description=les.get("description", ""),
-                content="⏳ Generating content...",
-                content_markdown="⏳ Generating content...",
+                content="Generating content...",
+                content_markdown="Generating content...",
                 learning_objectives=les.get("learning_objectives", []),
                 difficulty=DifficultyLevel(les.get("difficulty", "beginner")),
                 estimated_duration_minutes=les.get("estimated_duration_minutes", 30),
@@ -405,7 +405,7 @@ async def ai_import_status(
     )
     total = total_result.scalar() or 0
 
-    PLACEHOLDER = "⏳ Generating content..."
+    PLACEHOLDER = "Generating content..."
     generated_result = await db.execute(
         select(func.count(Lesson.id))
         .join(Module).where(
