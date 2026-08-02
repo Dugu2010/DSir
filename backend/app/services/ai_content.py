@@ -49,84 +49,46 @@ def _call_text_llm(prompt: str, max_tokens: int = 4096) -> str:
 def _call_gemini_text(prompt: str, max_tokens: int = 4096) -> str:
     model = settings.AI_DEFAULT_MODEL or "gemini-2.0-flash"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    body = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": max_tokens},
-        "safetySettings": [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        ],
-    }
+    body = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"temperature": 0.2, "maxOutputTokens": max_tokens}, "safetySettings": [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}]}
     resp = httpx.post(f"{url}?key={settings.GEMINI_API_KEY}", json=body, timeout=180.0)
     if resp.status_code != 200:
-        raise RuntimeError(f"Gemini HTTP {resp.status_code}: {resp.text[:300]}")
+        raise RuntimeError(f"Gemini HTTP {resp.status_code}")
     data = resp.json()
-    candidates = data.get("candidates") or []
-    if not candidates:
-        raise RuntimeError("Gemini blocked response")
-    cand = candidates[0]
-    text = "".join(p.get("text", "") for p in cand.get("content", {}).get("parts", []))
+    if not data.get("candidates"):
+        raise RuntimeError("Gemini blocked")
+    text = "".join(p.get("text", "") for p in data["candidates"][0].get("content", {}).get("parts", []))
     if not text:
-        raise RuntimeError("Gemini returned empty text")
+        raise RuntimeError("Gemini empty")
     return text
 
 
 def _call_gemini_multimodal(prompt: str, image: dict, max_tokens: int = 4096) -> str:
     model = settings.AI_DEFAULT_MODEL or "gemini-2.0-flash"
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-    body = {
-        "contents": [{"parts": [
-            {"inline_data": {"mime_type": image["mime"], "data": image["data"]}},
-            {"text": prompt},
-        ]}],
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": max_tokens},
-        "safetySettings": [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
-        ],
-    }
+    body = {"contents": [{"parts": [{"inline_data": {"mime_type": image["mime"], "data": image["data"]}}, {"text": prompt}]}], "generationConfig": {"temperature": 0.2, "maxOutputTokens": max_tokens}, "safetySettings": [{"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"}, {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"}]}
     resp = httpx.post(f"{url}?key={settings.GEMINI_API_KEY}", json=body, timeout=180.0)
     if resp.status_code != 200:
-        raise RuntimeError(f"Gemini HTTP {resp.status_code}: {resp.text[:300]}")
+        raise RuntimeError(f"Gemini HTTP {resp.status_code}")
     data = resp.json()
     if not data.get("candidates"):
-        raise RuntimeError("Gemini blocked response")
-    cand = data["candidates"][0]
-    text = "".join(p.get("text", "") for p in cand.get("content", {}).get("parts", []))
+        raise RuntimeError("Gemini blocked")
+    text = "".join(p.get("text", "") for p in data["candidates"][0].get("content", {}).get("parts", []))
     if not text:
-        raise RuntimeError("Gemini returned empty text")
+        raise RuntimeError("Gemini empty")
     return text
 
 
 def _call_openai_text(prompt: str, max_tokens: int = 4096) -> str:
     base_url = (settings.AI_OPENAI_BASE_URL or "https://api.openai.com/v1").rstrip("/")
     model = settings.AI_DEFAULT_MODEL or "gpt-4o-mini"
-    body = {
-        "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": max_tokens,
-        "temperature": 0.2,
-    }
+    body = {"model": model, "messages": [{"role": "user", "content": prompt}], "max_tokens": max_tokens, "temperature": 0.2}
     for attempt in range(5):
-        resp = httpx.post(
-            f"{base_url}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json=body,
-            timeout=180.0,
-        )
+        resp = httpx.post(f"{base_url}/chat/completions", headers={"Authorization": f"Bearer {settings.OPENAI_API_KEY}", "Content-Type": "application/json"}, json=body, timeout=180.0)
         if resp.status_code == 200:
             data = resp.json()
-            choices = data.get("choices", [])
-            if not choices:
-                raise RuntimeError("No choices in response")
-            text = choices[0].get("message", {}).get("content", "")
+            if not data.get("choices"):
+                raise RuntimeError("No choices")
+            text = data["choices"][0].get("message", {}).get("content", "")
             if not text:
                 raise RuntimeError("Empty response")
             logger.info("openai.ok", model=model, response_len=len(text))
@@ -162,10 +124,7 @@ def extract_text(data: bytes, filename: str = "") -> str:
         if not settings.GEMINI_API_KEY:
             raise RuntimeError("Image OCR needs GEMINI_API_KEY")
         mime = f"image/{ext}" if ext != "jpg" else "image/jpeg"
-        return _call_gemini_multimodal(
-            "Transcribe all text from this image verbatim.",
-            image={"mime": mime, "data": base64.b64encode(data).decode()},
-        )
+        return _call_gemini_multimodal("Transcribe all text from this image verbatim.", image={"mime": mime, "data": base64.b64encode(data).decode()})
     try:
         return data.decode("utf-8")
     except UnicodeDecodeError:
@@ -202,11 +161,7 @@ def _pdf_ocr(data: bytes) -> str:
                 buf = io.BytesIO()
                 img.original.save(buf, format="PNG")
                 b64 = base64.b64encode(buf.getvalue()).decode()
-                t = _call_gemini_multimodal(
-                    "Extract ALL text from this page verbatim.",
-                    image={"mime": "image/png", "data": b64},
-                    max_tokens=4096,
-                )
+                t = _call_gemini_multimodal("Extract ALL text from this page verbatim.", image={"mime": "image/png", "data": b64}, max_tokens=4096)
                 texts.append(t)
             except Exception as e:
                 logger.warning("ocr_page_failed", page=i + 1, error=str(e)[:100])
@@ -215,46 +170,12 @@ def _pdf_ocr(data: bytes) -> str:
 
 def generate_structure_preview(raw_text: str, topic_hint: str = "") -> dict:
     sampled = _sample_text(raw_text, max_chars=8000)
-    prompt = f"""Analyze this educational content and create a course outline.
+    prompt = f"""Analyze this educational content and create a course outline. Output ONLY valid JSON, no other text, no markdown fences:
 
-Output ONLY valid JSON, no other text, no markdown fences:
-
-{{
-  "course": {{
-    "title": "Python Programming Handbook",
-    "slug": "python-handbook",
-    "description": "A comprehensive guide to Python programming",
-    "long_description": "Learn Python from basics to advanced topics",
-    "difficulty": "beginner",
-    "estimated_duration_minutes": 600,
-    "skill_tags": ["python", "programming"],
-    "learning_objectives": ["Write Python programs", "Understand core concepts"]
-  }},
-  "modules": [
-    {{
-      "title": "01. Getting Started",
-      "slug": "getting-started",
-      "description": "Introduction to Python and setup",
-      "display_order": 1,
-      "lessons": [
-        {{
-          "title": "What is Python?",
-          "slug": "what-is-python",
-          "description": "Overview of Python programming language",
-          "difficulty": "beginner",
-          "estimated_duration_minutes": 30,
-          "skill_tags": ["python"],
-          "learning_objectives": ["Understand what Python is"]
-        }}
-      ]
-    }}
-  ]
-}}
+{{"course":{{"title":"...","slug":"...","description":"...","long_description":"...","difficulty":"beginner","estimated_duration_minutes":600,"skill_tags":[...],"learning_objectives":[...]}},"modules":[{{"title":"01. ...","slug":"...","description":"...","display_order":1,"lessons":[{{"title":"...","slug":"...","description":"...","difficulty":"beginner","estimated_duration_minutes":30,"skill_tags":[...],"learning_objectives":[...]}}]}}]}}
 
 Rules: 5-8 modules, 2-4 lessons each, lowercase-hyphenated slugs, cover FULL scope.
-
 Topic: {topic_hint}
-
 Content (sampled from {len(raw_text)} chars):
 {sampled}"""
     logger.info("preview.prompt", total_chars=len(raw_text), sampled_chars=len(sampled))
@@ -267,26 +188,9 @@ Content (sampled from {len(raw_text)} chars):
 def generate_lesson_content(course_title: str, module_title: str, lesson_title: str) -> dict:
     prompt = f"""Write a detailed programming lesson. Output ONLY valid JSON (no markdown fences):
 
-{{
-  "content_markdown": "## Introduction\\n\\nEngaging intro...\\n\\n## Core Concepts\\n\\nExplanation with examples...\\n\\n```python\\n# Working code\\nprint('hello')\\n```\\n\\n## Key Takeaways\\n\\n- Point 1\\n- Point 2\\n\\n## Practice\\n\\nInstructions...",
-  "exercises": [
-    {{
-      "title": "Practice: Exercise Name",
-      "description": "What to practice",
-      "instructions": "Step by step",
-      "exercise_type": "code_completion",
-      "difficulty": "easy",
-      "starter_code": "# Write code here\\ndef solve():\\n    pass",
-      "solution_code": "# Solution\\ndef solve():\\n    return True",
-      "test_code": "assert solve() == True",
-      "hints": [{{"level": 1, "content": "Think about..."}}],
-      "points": 10
-    }}
-  ]
-}}
+{{"content_markdown":"## Introduction\\n\\nEngaging intro...\\n\\n## Core Concepts\\n\\nExplanation with examples...\\n\\n```python\\n# Working code\\nprint('hello')\\n```\\n\\n## Key Takeaways\\n\\n- Point 1\\n- Point 2\\n\\n## Practice\\n\\nInstructions...","exercises":[{{"title":"Practice: Exercise Name","description":"What to practice","instructions":"Step by step","exercise_type":"code_completion","difficulty":"easy","starter_code":"# Write code here\\ndef solve():\\n    pass","solution_code":"# Solution\\ndef solve():\\n    return True","test_code":"assert solve() == True","hints":[{{"level":1,"content":"Think about..."}}],"points":10}}]}}
 
 Requirements: 400-600 words, 2-3 python blocks, 1-2 exercises, valid JSON, no trailing commas.
-
 Course: {course_title}
 Module: {module_title}
 Lesson: {lesson_title}"""
@@ -297,12 +201,7 @@ Lesson: {lesson_title}"""
 def ai_edit_lesson(current_content: str, course_title: str, lesson_title: str, edit_instruction: str) -> dict:
     prompt = f"""Edit a programming lesson based on instructions. Output ONLY valid JSON:
 
-{{
-  "content_markdown": "Full updated content with edits applied",
-  "exercises": [
-    {{"title": "...", "description": "...", "instructions": "...", "exercise_type": "code_completion", "difficulty": "easy", "starter_code": "# code\\n", "solution_code": "# solution\\n", "test_code": "pass", "hints": [{{"level": 1, "content": "..."}}], "points": 10}}
-  ]
-}}
+{{"content_markdown":"Full updated content with edits applied","exercises":[{{"title":"...","description":"...","instructions":"...","exercise_type":"code_completion","difficulty":"easy","starter_code":"# code\\n","solution_code":"# solution\\n","test_code":"pass","hints":[{{"level":1,"content":"..."}}],"points":10}}]}}
 
 Course: {course_title}
 Lesson: {lesson_title}
@@ -323,7 +222,7 @@ def ai_improve_course(course_data: dict) -> dict:
 
 Current: {json.dumps(course_data)}
 
-Return: {{"title": "...", "description": "...", "long_description": "...", "difficulty": "...", "skill_tags": [...], "learning_objectives": [...], "improvements_made": [...], "suggestions": [...]}}"""
+Return: {{"title":"...","description":"...","long_description":"...","difficulty":"...","skill_tags":[...],"learning_objectives":[...],"improvements_made":[...],"suggestions":[...]}}"""
     resp = _call_text_llm(prompt, max_tokens=4096)
     return _parse_json(resp)
 
@@ -336,7 +235,7 @@ Description: {course_description}
 Existing: {existing}
 {topic_line}
 
-Output ONLY valid JSON: {{"title": "XX. Title", "slug": "slug", "description": "...", "display_order": {len(existing_modules)+1}, "lessons": [{{"title": "...", "slug": "...", "description": "...", "difficulty": "beginner", "estimated_duration_minutes": 30, "skill_tags": [...], "learning_objectives": [...]}}]}}
+Output ONLY valid JSON: {{"title":"XX. Title","slug":"slug","description":"...","display_order":{len(existing_modules)+1},"lessons":[{{"title":"...","slug":"...","description":"...","difficulty":"beginner","estimated_duration_minutes":30,"skill_tags":[...],"learning_objectives":[...]}}]}}
 2-4 lessons, hyphenated slugs."""
     resp = _call_text_llm(prompt, max_tokens=4096)
     return _parse_json(resp)
@@ -347,7 +246,7 @@ def ai_evaluate_course(course_data: dict) -> dict:
 
 Course: {json.dumps(course_data)}
 
-Return: {{"quality_score": 7.5, "recommendation": "keep", "strengths": [...], "weaknesses": [...], "action_suggestions": [...], "should_delete": false, "reasoning": "..."}}
+Return: {{"quality_score":7.5,"recommendation":"keep","strengths":[...],"weaknesses":[...],"action_suggestions":[...],"should_delete":false,"reasoning":"..."}}
 Score 1-10. should_delete=true only if score<4 and unsalvageable."""
     resp = _call_text_llm(prompt, max_tokens=4096)
     return _parse_json(resp)
@@ -358,15 +257,9 @@ def ai_regenerate_lesson(course_title: str, module_title: str, lesson_title: str
     notes = f"\nImprove: {improvement_notes}" if improvement_notes else ""
     prompt = f"""Write an EXCEPTIONAL programming lesson. Output ONLY valid JSON:
 
-{{
-  "content_markdown": "## Introduction\\n\\nEngaging hook with real-world context...\\n\\n## Core Concepts\\n\\nClear step-by-step with analogies...\\n\\n```python\\n# Practical commented code\\n```\\n\\n## Deep Dive\\n\\nAdvanced insights...\\n\\n## Common Pitfalls\\n\\n- Mistake and fix...\\n\\n## Key Takeaways\\n\\n- Point 1\\n- Point 2\\n\\n## Practice\\n\\nInstructions...",
-  "exercises": [
-    {{"title": "Practice: ...", "description": "...", "instructions": "...", "exercise_type": "code_completion", "difficulty": "easy", "starter_code": "# code\\ndef solve():\\n    pass", "solution_code": "# solution\\ndef solve():\\n    return result", "test_code": "assert solve() == expected", "hints": [{{"level":1,"content":"..."}},{{"level":2,"content":"..."}}], "points": 10}}
-  ]
-}}
+{{"content_markdown":"## Introduction\\n\\nEngaging hook...\\n\\n## Core Concepts\\n\\nClear step-by-step...\\n\\n```python\\n# Practical code\\n```\\n\\n## Deep Dive\\n\\nAdvanced insights...\\n\\n## Common Pitfalls\\n\\n- Mistake and fix...\\n\\n## Key Takeaways\\n\\n- Point 1\\n- Point 2\\n\\n## Practice\\n\\nInstructions...","exercises":[{{"title":"Practice: ...","description":"...","instructions":"...","exercise_type":"code_completion","difficulty":"easy","starter_code":"# code\\ndef solve():\\n    pass","solution_code":"# solution\\ndef solve():\\n    return result","test_code":"assert solve() == expected","hints":[{{"level":1,"content":"..."}},{{"level":2,"content":"..."}}],"points":10}}]}}
 
 500-800 words, 2-3 python blocks, Common Pitfalls section, 1-2 exercises, valid JSON.
-
 Course: {course_title}
 Module: {module_title}
 Lesson: {lesson_title}{ctx}{notes}"""
@@ -391,29 +284,30 @@ def _parse_json(text: str) -> dict:
         return json.loads(_sanitize_json_escapes(text))
     except json.JSONDecodeError:
         pass
-    for pat in [r'```json\\s*\\n([\\s\\S]*?)\\n```', r'```\\s*\\n([\\s\\S]*?)\\n```']:
-        m = re.search(pat, text)
-        if m:
-            inner = m.group(1).strip()
-            try:
-                return json.loads(inner)
-            except json.JSONDecodeError:
-                pass
-            try:
-                return json.loads(_sanitize_json_escapes(inner))
-            except json.JSONDecodeError:
-                pass
-    depth = start_pos = 0
-    sp = -1
+    # NB: use byte patterns to avoid double-escaping through JSON transport
+    _fence_re = r'```(?:json)?[ \t]*\n([\s\S]*?)\n[ \t]*```'
+    m = re.search(_fence_re, text)
+    if m:
+        inner = m.group(1).strip()
+        try:
+            return json.loads(inner)
+        except json.JSONDecodeError:
+            pass
+        try:
+            return json.loads(_sanitize_json_escapes(inner))
+        except json.JSONDecodeError:
+            pass
+    depth = sp = 0
+    start_pos = -1
     for i, ch in enumerate(text):
         if ch == '{':
             if depth == 0:
-                sp = i
+                start_pos = i
             depth += 1
         elif ch == '}':
             depth -= 1
-            if depth == 0 and sp >= 0:
-                c = text[sp:i + 1]
+            if depth == 0 and start_pos >= 0:
+                c = text[start_pos:i + 1]
                 try:
                     return json.loads(c)
                 except json.JSONDecodeError:
@@ -422,7 +316,7 @@ def _parse_json(text: str) -> dict:
                     return json.loads(_sanitize_json_escapes(c))
                 except json.JSONDecodeError:
                     pass
-                sp = -1
+                start_pos = -1
     chunks = []
     depth = sc = 0
     start = -1
@@ -447,14 +341,14 @@ def _parse_json(text: str) -> dict:
             continue
     for chunk in chunks:
         try:
-            f = re.sub(r',\\s*}', '}', chunk)
-            f = re.sub(r',\\s*]', ']', f)
+            f = re.sub(r',[ \t]*}', '}', chunk)
+            f = re.sub(r',[ \t]*]', ']', f)
             return json.loads(f)
         except json.JSONDecodeError:
             continue
         try:
-            f = re.sub(r',\\s*}', '}', chunk)
-            f = re.sub(r',\\s*]', ']', f)
+            f = re.sub(r',[ \t]*}', '}', chunk)
+            f = re.sub(r',[ \t]*]', ']', f)
             return json.loads(_sanitize_json_escapes(f))
         except json.JSONDecodeError:
             continue
