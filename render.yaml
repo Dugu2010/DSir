@@ -3,7 +3,7 @@ services:
     name: dsir-api
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
+    startCommand: python -m app.seed && gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -22,6 +22,12 @@ services:
         value: '["https://dsir.vercel.app","http://localhost:3000"]'
       - key: ENVIRONMENT
         value: production
+      - key: AI_DEFAULT_PROVIDER
+        value: nvidia
+      - key: AI_DEFAULT_MODEL
+        value: nvidia/llama-3.1-nemotron-70b-instruct
+      - key: AI_OPENAI_BASE_URL
+        value: https://integrate.api.nvidia.com/v1
 
 databases:
   - name: dsir-db
