@@ -18,6 +18,7 @@ from app.utils.deps import require_admin, require_superadmin
 from app.models import User as UserModel
 from uuid import UUID, uuid4
 from datetime import datetime, timezone, timedelta, date
+import asyncio
 import structlog
 
 logger = structlog.get_logger()
@@ -273,7 +274,10 @@ async def ai_import_course(
     admin_user: UserModel = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Step 2: Admin approved the structure → generate lesson content via AI → import into DB."""
+    """Step 2: Admin approved the structure → generate lesson content via AI → import into DB.
+
+    Lessons are generated sequentially with a delay to respect free-tier rate limits.
+    """
     from app.services.ai_content import generate_lesson_content
 
     c = structure.get("course", {})
@@ -306,6 +310,7 @@ async def ai_import_course(
     total_lessons = 0
     total_exercises = 0
     course_title = c.get("title", "Course")
+    total_lesson_count = sum(len(m.get("lessons", [])) for m in modules_data)
 
     for mi, mod in enumerate(modules_data):
         module = Module(
@@ -319,7 +324,10 @@ async def ai_import_course(
         await db.flush()
 
         for li, les in enumerate(mod.get("lessons", [])):
-            logger.info("ai.import.lesson", mod=mi+1, les=li+1, title=les.get("title"))
+            lesson_num = total_lessons + 1
+            logger.info("ai.import.lesson", mod=mi+1, les=li+1,
+                       title=les.get("title"),
+                       progress=f"{lesson_num}/{total_lesson_count}")
 
             try:
                 content = generate_lesson_content(
@@ -376,6 +384,10 @@ async def ai_import_course(
                 )
                 db.add(exercise)
                 total_exercises += 1
+
+            # ── Rate-limit breathing room (3s) for free-tier providers ──
+            if total_lessons < total_lesson_count:
+                await asyncio.sleep(3.0)
 
     await db.flush()
     await db.commit()
