@@ -14,8 +14,10 @@ from app.config import get_settings
 from uuid import UUID
 from datetime import datetime, timezone
 import httpx
+import structlog
 
 settings = get_settings()
+logger = structlog.get_logger()
 router = APIRouter(prefix="/ai", tags=["AI"])
 
 
@@ -155,59 +157,193 @@ async def send_message(
     return assistant_msg
 
 
+# ═══════════════════════════════════════════════════════════════
+# AI PROVIDER ROUTING
+# ═══════════════════════════════════════════════════════════════
+
 async def _call_ai_provider(messages: list[dict]) -> str:
-    """Call the configured AI provider. Supports OpenAI and Anthropic."""
+    """Call the configured AI provider. Supports Gemini, OpenAI, and Anthropic."""
     provider = settings.AI_DEFAULT_PROVIDER.lower()
 
-    if provider == "openai" and settings.OPENAI_API_KEY:
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
-                    "https://api.openai.com/v1/chat/completions",
-                    headers={
-                        "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": settings.AI_DEFAULT_MODEL,
-                        "messages": messages,
-                        "max_tokens": 2000,
-                        "temperature": 0.7,
-                    },
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    return data["choices"][0]["message"]["content"]
-                return _get_fallback_response(messages[-1]["content"])
-        except Exception:
-            return _get_fallback_response(messages[-1]["content"])
+    # ── Gemini (Google AI) — free tier, best default ──
+    if provider == "gemini" and settings.GEMINI_API_KEY:
+        return await _call_gemini_chat(messages)
 
+    # ── OpenAI ──
+    elif provider == "openai" and settings.OPENAI_API_KEY:
+        return await _call_openai_chat(messages)
+
+    # ── Anthropic ──
     elif provider == "anthropic" and settings.ANTHROPIC_API_KEY:
-        try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
-                response = await client.post(
-                    "https://api.anthropic.com/v1/messages",
-                    headers={
-                        "x-api-key": settings.ANTHROPIC_API_KEY,
-                        "anthropic-version": "2023-06-01",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": "claude-3-5-sonnet-20241022",
-                        "max_tokens": 2000,
-                        "messages": [m for m in messages if m["role"] != "system"],
-                        "system": next((m["content"] for m in messages if m["role"] == "system"), ""),
-                    },
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    return data["content"][0]["text"]
-                return _get_fallback_response(messages[-1]["content"])
-        except Exception:
-            return _get_fallback_response(messages[-1]["content"])
+        return await _call_anthropic_chat(messages)
 
+    # ── No provider configured ──
+    logger.warning("ai_provider.unavailable", provider=provider,
+                   has_gemini=bool(settings.GEMINI_API_KEY),
+                   has_openai=bool(settings.OPENAI_API_KEY),
+                   has_anthropic=bool(settings.ANTHROPIC_API_KEY))
     return _get_fallback_response(messages[-1]["content"])
 
+
+# ═══════════════════════════════════════════════════════════════
+# GEMINI CHAT (Google AI — FREE tier)
+# ═══════════════════════════════════════════════════════════════
+
+async def _call_gemini_chat(messages: list[dict]) -> str:
+    """Call Gemini REST API for chat.
+
+    Converts OpenAI-format messages to Gemini format:
+    - systemInstruction for the system prompt
+    - contents[] with alternating user/model turns
+    """
+    model = settings.AI_DEFAULT_MODEL or "gemini-2.0-flash"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+
+    # Extract system prompt (first message if role=system)
+    system_prompt = ""
+    system_msgs = [m for m in messages if m["role"] == "system"]
+    if system_msgs:
+        system_prompt = "\n\n".join(m["content"] for m in system_msgs)
+
+    # Convert conversation to Gemini contents format
+    # Skip the system message, use alternating user/model
+    contents = []
+    chat_msgs = [m for m in messages if m["role"] != "system"]
+    for msg in chat_msgs:
+        role = "user" if msg["role"] == "user" else "model"
+        contents.append({
+            "role": role,
+            "parts": [{"text": msg["content"]}]
+        })
+
+    body = {
+        "contents": contents,
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 2000,
+        },
+        "safetySettings": [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ],
+    }
+
+    if system_prompt:
+        body["systemInstruction"] = {
+            "role": "system",
+            "parts": [{"text": system_prompt}]
+        }
+
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            response = await client.post(
+                f"{url}?key={settings.GEMINI_API_KEY}",
+                json=body,
+            )
+            if response.status_code != 200:
+                logger.warning("gemini_chat.http_error",
+                               status=response.status_code,
+                               body=response.text[:300])
+                return _get_fallback_response(messages[-1]["content"])
+
+            data = response.json()
+            candidates = data.get("candidates", [])
+            if not candidates:
+                fb = data.get("promptFeedback", {})
+                reason = fb.get("blockReason", "unknown")
+                logger.warning("gemini_chat.blocked", reason=reason)
+                return _get_fallback_response(messages[-1]["content"])
+
+            cand = candidates[0]
+            finish = cand.get("finishReason", "STOP")
+            text = "".join(
+                p.get("text", "") for p in cand.get("content", {}).get("parts", [])
+            )
+
+            if not text:
+                logger.warning("gemini_chat.empty_text", finish=finish)
+                return _get_fallback_response(messages[-1]["content"])
+
+            logger.info("gemini_chat.ok", response_len=len(text), finish=finish)
+            return text
+
+    except Exception as e:
+        logger.error("gemini_chat.exception", error=str(e)[:200])
+        return _get_fallback_response(messages[-1]["content"])
+
+
+# ═══════════════════════════════════════════════════════════════
+# OPENAI CHAT
+# ═══════════════════════════════════════════════════════════════
+
+async def _call_openai_chat(messages: list[dict]) -> str:
+    """Call OpenAI Chat Completions API."""
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": settings.AI_DEFAULT_MODEL or "gpt-4o-mini",
+                    "messages": messages,
+                    "max_tokens": 2000,
+                    "temperature": 0.7,
+                },
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data["choices"][0]["message"]["content"]
+            logger.warning("openai_chat.http_error",
+                           status=response.status_code,
+                           body=response.text[:300])
+            return _get_fallback_response(messages[-1]["content"])
+    except Exception as e:
+        logger.error("openai_chat.exception", error=str(e)[:200])
+        return _get_fallback_response(messages[-1]["content"])
+
+
+# ═══════════════════════════════════════════════════════════════
+# ANTHROPIC CHAT
+# ═══════════════════════════════════════════════════════════════
+
+async def _call_anthropic_chat(messages: list[dict]) -> str:
+    """Call Anthropic Messages API."""
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": settings.ANTHROPIC_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "claude-3-5-sonnet-20241022",
+                    "max_tokens": 2000,
+                    "messages": [m for m in messages if m["role"] != "system"],
+                    "system": next((m["content"] for m in messages if m["role"] == "system"), ""),
+                },
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return data["content"][0]["text"]
+            logger.warning("anthropic_chat.http_error",
+                           status=response.status_code,
+                           body=response.text[:300])
+            return _get_fallback_response(messages[-1]["content"])
+    except Exception as e:
+        logger.error("anthropic_chat.exception", error=str(e)[:200])
+        return _get_fallback_response(messages[-1]["content"])
+
+
+# ═══════════════════════════════════════════════════════════════
+# FALLBACK & SYSTEM PROMPTS
+# ═══════════════════════════════════════════════════════════════
 
 def _get_fallback_response(user_message: str) -> str:
     """Provide a helpful fallback when AI APIs are unavailable."""

@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = None
     AI_DEFAULT_PROVIDER: str = "gemini"
     AI_DEFAULT_MODEL: str = "gemini-2.0-flash"
+    # Custom OpenAI-compatible endpoint (for Groq, DeepSeek, OpenRouter, etc.)
+    # e.g. https://api.groq.com/openai/v1 or https://api.deepseek.com/v1
+    AI_OPENAI_BASE_URL: Optional[str] = None
 
     # Sandbox
     SANDBOX_DOCKER_IMAGE: str = "dsir-sandbox:latest"
