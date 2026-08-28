@@ -12,33 +12,41 @@ interface ThemeContextType {
 }
 
 const ThemeContext = createContext<ThemeContextType>({
-  theme: "system",
-  resolvedTheme: "light",
+  theme: "dark",
+  resolvedTheme: "dark",
   setTheme: () => {},
   toggleTheme: () => {},
 });
 
 function getSystemTheme(): "light" | "dark" {
-  if (typeof window === "undefined") return "light";
+  if (typeof window === "undefined") return "dark";
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
+// DSir Academy ships with DARK as the default experience. The persisted
+// default is "dark" so first-time visitors land on the calm night palette
+// (the inline script in layout.tsx applies the class before first paint).
+const DEFAULT_THEME: Theme = "dark";
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("system");
-  const [resolvedTheme, setResolved] = useState<"light" | "dark">("light");
+  const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
+  const [resolvedTheme, setResolved] = useState<"light" | "dark">("dark");
 
   const applyTheme = useCallback((t: "light" | "dark") => {
     setResolved(t);
     document.documentElement.classList.toggle("dark", t === "dark");
-    localStorage.setItem("theme", t);
   }, []);
 
   useEffect(() => {
-    const stored = localStorage.getItem("theme") as Theme | null;
-    const initial = stored || "system";
+    let stored: Theme | null = null;
+    try {
+      stored = localStorage.getItem("theme") as Theme | null;
+    } catch {
+      stored = null;
+    }
+    const initial = stored || DEFAULT_THEME;
     setThemeState(initial);
-    const resolved = initial === "system" ? getSystemTheme() : initial;
-    applyTheme(resolved);
+    applyTheme(initial === "system" ? getSystemTheme() : initial);
   }, [applyTheme]);
 
   useEffect(() => {
@@ -52,8 +60,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const setTheme = useCallback(
     (t: Theme) => {
       setThemeState(t);
-      const resolved = t === "system" ? getSystemTheme() : t;
-      applyTheme(resolved);
+      try {
+        localStorage.setItem("theme", t);
+      } catch {
+        /* storage unavailable — theme still applies for this session */
+      }
+      applyTheme(t === "system" ? getSystemTheme() : t);
     },
     [applyTheme]
   );
@@ -61,6 +73,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const toggleTheme = useCallback(() => {
     const next = resolvedTheme === "dark" ? "light" : "dark";
     setThemeState(next);
+    try {
+      localStorage.setItem("theme", next);
+    } catch {
+      /* storage unavailable */
+    }
     applyTheme(next);
   }, [resolvedTheme, applyTheme]);
 

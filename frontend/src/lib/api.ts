@@ -46,16 +46,16 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
       if (token) (retryConfig.headers as Record<string, string>)["Authorization"] = `Bearer ${token}`;
       const retryRes = await fetch(`${API_BASE}${endpoint}`, retryConfig);
       if (!retryRes.ok) {
-        const error = await retryRes.json().catch(() => ({ detail: "Request failed" }));
-        throw new ApiError(retryRes.status, error.detail || "Request failed");
+        const error = await retryRes.json().catch(() => ({}));
+        throw new ApiError(retryRes.status, error.message || error.detail || "Request failed");
       }
       return retryRes.json();
     }
   }
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ detail: "Request failed" }));
-    throw new ApiError(res.status, error.detail || "Request failed");
+    const error = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, error.message || error.detail || "Request failed");
   }
 
   if (res.status === 204) return undefined as T;
@@ -96,6 +96,16 @@ export const auth = {
   me: () => request<import("./types").User>("/api/v1/auth/me"),
   refresh: (refresh_token: string) =>
     request<{ access_token: string; refresh_token: string }>("/api/v1/auth/refresh", { method: "POST", body: { refresh_token }, auth: false }),
+  changePassword: (data: { current_password: string; new_password: string }) =>
+    request("/api/v1/auth/change-password", { method: "POST", body: data }),
+  forgotPassword: (email: string) =>
+    request<{ detail: string; reset_token?: string; reset_link?: string }>("/api/v1/auth/forgot-password", { method: "POST", body: { email }, auth: false }),
+  resetPassword: (token: string, new_password: string) =>
+    request("/api/v1/auth/reset-password", { method: "POST", body: { token, new_password }, auth: false }),
+  verifyEmail: (token: string) =>
+    request("/api/v1/auth/verify-email", { method: "POST", body: {}, auth: false }),
+  resendVerification: () =>
+    request("/api/v1/auth/resend-verification", { method: "POST" }),
 };
 
 // Users
@@ -105,17 +115,25 @@ export const users = {
   getStats: () => request<import("./types").UserStats>("/api/v1/users/me/stats"),
   getEnrollments: () => request<import("./types").Enrollment[]>("/api/v1/users/me/enrollments"),
   enroll: (courseId: string) => request(`/api/v1/users/me/enrollments/${courseId}`, { method: "POST" }),
+  getCertificates: () => request<import("./types").Certificate[]>("/api/v1/users/me/certificates"),
   updateProfile: (data: Partial<import("./types").User>) =>
     request<import("./types").User>("/api/v1/users/me", { method: "PATCH", body: data }),
   getBookmarks: () => request("/api/v1/users/me/bookmarks"),
   createBookmark: (data: { lesson_id?: string; exercise_id?: string; note?: string }) =>
     request("/api/v1/users/me/bookmarks", { method: "POST", body: data }),
   deleteBookmark: (id: string) => request(`/api/v1/users/me/bookmarks/${id}`, { method: "DELETE" }),
-  getNotes: (lessonId?: string) => request(`/api/v1/users/me/notes${lessonId ? `?lesson_id=${lessonId}` : ""}`),
+  getNotes: (lessonId?: string) => request<import("./types").UserNote[]>(`/api/v1/users/me/notes${lessonId ? `?lesson_id=${lessonId}` : ""}`),
   createNote: (data: { lesson_id: string; content: string }) =>
     request("/api/v1/users/me/notes", { method: "POST", body: data }),
   getNotifications: (page = 1, unreadOnly = false) =>
     request(`/api/v1/users/me/notifications?page=${page}&size=20${unreadOnly ? "&unread_only=true" : ""}`),
+  markNotificationRead: (id: string) =>
+    request(`/api/v1/users/me/notifications/${id}/read`, { method: "POST" }),
+  markAllNotificationsRead: () => request(`/api/v1/users/me/notifications/read-all`, { method: "POST" }),
+  updateDailyGoal: (data: { target_minutes: number; target_lessons: number; target_exercises: number }) =>
+    request(`/api/v1/users/me/daily-goal`, { method: "PUT", body: data }),
+  getKnowledge: () => request<import("./types").KnowledgeItem[]>("/api/v1/users/me/knowledge"),
+  getAchievements: () => request<import("./types").Achievement[]>("/api/v1/users/me/achievements"),
 };
 
 // Courses
@@ -128,7 +146,13 @@ export const courses = {
   get: (slug: string) => request<import("./types").Course>(`/api/v1/courses/${slug}`),
   getFeatured: () => request<import("./types").CourseListItem[]>("/api/v1/courses/featured", { auth: false }),
   getModules: (slug: string) => request<import("./types").Module[]>(`/api/v1/courses/${slug}/modules`),
-  getLessons: (slug: string) => request(`/api/v1/courses/${slug}/lessons`),
+  // Returns the full course structure (modules with their lessons). The
+  // backend exposes this as /courses/{slug}/modules.
+  getLessons: (slug: string) => request<import("./types").CourseStructure[]>(`/api/v1/courses/${slug}/modules`),
+  getReviews: (slug: string) =>
+    request<import("./types").PaginatedResponse<import("./types").Review>>(`/api/v1/courses/${slug}/reviews`, { auth: false }),
+  createReview: (slug: string, data: { rating: number; review?: string }) =>
+    request<import("./types").Review>(`/api/v1/courses/${slug}/reviews`, { method: "POST", body: data }),
   delete: (slug: string) => request(`/api/v1/courses/${slug}`, { method: "DELETE" }),
 };
 
@@ -185,6 +209,64 @@ export const ai = {
   deleteConversation: (convId: string) => request(`/api/v1/ai/conversations/${convId}`, { method: "DELETE" }),
 };
 
+// Quizzes
+
+export const quizzes = {
+  list: (params: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request<import("./types").PaginatedResponse<import("./types").QuizListItem>>(`/api/v1/quizzes/?${qs}`);
+  },
+  getDetail: (quizId: string) =>
+    request<import("./types").QuizDetail>(`/api/v1/quizzes/${quizId}`),
+  submit: (quizId: string, answers: Record<string, unknown>) =>
+    request<import("./types").QuizResult>(`/api/v1/quizzes/${quizId}/submit`, { method: "POST", body: { answers } }),
+  getResults: (quizId: string) =>
+    request<import("./types").QuizResult>(`/api/v1/quizzes/${quizId}/results`),
+};
+
+// Projects
+
+export const projects = {
+  list: (params: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request<import("./types").PaginatedResponse<any>>(`/api/v1/practice/projects?${qs}`);
+  },
+  get: (projectId: string) =>
+    request<import("./types").ProjectDetail>(`/api/v1/practice/projects/${projectId}`),
+  submit: (projectId: string, codeFiles: Record<string, unknown>) =>
+    request<import("./types").ProjectSubmission>(`/api/v1/practice/projects/${projectId}/submit`, { method: "POST", body: { code_files: codeFiles } }),
+  getSubmissions: (page = 1) =>
+    request<import("./types").PaginatedResponse<import("./types").ProjectSubmission>>(`/api/v1/practice/projects/submissions?page=${page}&size=20`),
+};
+
+// Discussions
+
+export const discussions = {
+  list: (params: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return request<import("./types").PaginatedResponse<import("./types").Discussion>>(`/api/v1/discussions?${qs}`);
+  },
+  create: (data: { title: string; content: string; lesson_id?: string }) =>
+    request<import("./types").Discussion>(`/api/v1/discussions`, { method: "POST", body: data }),
+  get: (discussionId: string) =>
+    request<import("./types").Discussion>(`/api/v1/discussions/${discussionId}`),
+  addReply: (discussionId: string, data: { content: string; parent_id?: string }) =>
+    request<import("./types").DiscussionReply>(`/api/v1/discussions/${discussionId}/replies`, { method: "POST", body: data }),
+  markSolution: (replyId: string) =>
+    request(`/api/v1/discussions/replies/${replyId}/solution`, { method: "PUT" }),
+  voteReply: (replyId: string, direction: "up" | "down") =>
+    request(`/api/v1/discussions/replies/${replyId}/vote`, { method: "POST", body: { direction } }),
+};
+
+// Leaderboard
+
+export const leaderboard = {
+  get: (period: "daily" | "weekly" | "monthly" | "all_time" = "weekly") =>
+    request<import("./types").LeaderboardEntry[]>(`/api/v1/leaderboard?period=${period}`),
+  getMyRank: (period: "daily" | "weekly" | "monthly" | "all_time" = "weekly") =>
+    request<import("./types").UserRank>(`/api/v1/leaderboard/me?period=${period}`),
+};
+
 // Admin
 
 export const admin = {
@@ -194,12 +276,24 @@ export const admin = {
   deleteCourse: (id: string) => request(`/api/v1/admin/courses/${id}`, { method: "DELETE" }),
 };
 
+// Also add quizzes + projects + leaderboard to the generic api object
+// (the named exports above are the primary interface)
+
 export { ApiError };
 
+// Generic client. All backend routes are mounted under /api/v1 (see backend/app/main.py).
+// Normalize call sites that pass a bare path (e.g. "/learn/...") so they resolve correctly.
+const API_PREFIX = "/api/v1";
+
+function withPrefix(endpoint: string): string {
+  if (endpoint.startsWith(API_PREFIX)) return endpoint;
+  return `${API_PREFIX}${endpoint}`;
+}
+
 export const api = {
-  get: <T = any>(endpoint: string) => request<T>(endpoint),
-  post: <T = any>(endpoint: string, body?: unknown) => request<T>(endpoint, { method: "POST", body }),
-  put: <T = any>(endpoint: string, body?: unknown) => request<T>(endpoint, { method: "PUT", body }),
-  patch: <T = any>(endpoint: string, body?: unknown) => request<T>(endpoint, { method: "PATCH", body }),
-  delete: <T = any>(endpoint: string) => request<T>(endpoint, { method: "DELETE" }),
+  get: <T = any>(endpoint: string) => request<T>(withPrefix(endpoint)),
+  post: <T = any>(endpoint: string, body?: unknown) => request<T>(withPrefix(endpoint), { method: "POST", body }),
+  put: <T = any>(endpoint: string, body?: unknown) => request<T>(withPrefix(endpoint), { method: "PUT", body }),
+  patch: <T = any>(endpoint: string, body?: unknown) => request<T>(withPrefix(endpoint), { method: "PATCH", body }),
+  delete: <T = any>(endpoint: string) => request<T>(withPrefix(endpoint), { method: "DELETE" }),
 };

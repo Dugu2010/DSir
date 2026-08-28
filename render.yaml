@@ -28,6 +28,14 @@ services:
         value: nvidia/llama-3.1-nemotron-70b-instruct
       - key: AI_OPENAI_BASE_URL
         value: https://integrate.api.nvidia.com/v1
+      # AI provider keys — set in the Render dashboard (sync: false).
+      # GEMINI_API_KEY is used as the automatic fallback when the NVIDIA
+      # provider is unavailable; OPENAI_API_KEY is required to actually use
+      # the NVIDIA/OpenAI-compatible endpoint configured above.
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
 
 databases:
   - name: dsir-db

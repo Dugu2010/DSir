@@ -1,57 +1,100 @@
 "use client";
 
-import { useAuth } from "@/lib/auth";
+import { useQuery } from "@tanstack/react-query";
+import { users } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
-import { Trophy, Star, Flame, Award, Code2, BookOpen, Target, Zap } from "lucide-react";
+import { Badge } from "@/components/ui/Badge";
+import { PageLoader, ErrorState } from "@/components/ui/States";
+import { Trophy, Star, Lock, Zap } from "lucide-react";
+import { cn } from "@/lib/utils";
+import type { Achievement } from "@/lib/types";
 
-const allAchievements = [
-  { icon: "🐍", name: "Python Starter", desc: "Complete your first Python lesson", category: "learning", xp: 50, unlocked: true },
-  { icon: "⚔️", name: "Code Warrior", desc: "Complete 10 coding exercises", category: "practice", xp: 100, unlocked: true },
-  { icon: "🔥", name: "7-Day Streak", desc: "Maintain a 7-day learning streak", category: "streak", xp: 200, unlocked: true },
-  { icon: "🎓", name: "Course Graduate", desc: "Complete your first course", category: "milestone", xp: 500, unlocked: false },
-  { icon: "⭐", name: "Perfect Score", desc: "Get 100% on an exercise", category: "practice", xp: 75, unlocked: true },
-  { icon: "🌅", name: "Early Bird", desc: "Complete 5 lessons before 9 AM", category: "special", xp: 150, unlocked: false },
-  { icon: "💻", name: "Code Machine", desc: "Submit 50 exercise solutions", category: "practice", xp: 300, unlocked: false },
-  { icon: "📚", name: "Bookworm", desc: "Complete 25 lessons", category: "learning", xp: 250, unlocked: false },
-  { icon: "🏆", name: "Top 10", desc: "Reach the top 10 on weekly leaderboard", category: "social", xp: 400, unlocked: false },
-  { icon: "🎯", name: "Goal Crusher", desc: "Complete daily goal 5 days in a row", category: "streak", xp: 150, unlocked: false },
-];
+const categoryLabel: Record<string, string> = {
+  learning: "Learning",
+  practice: "Practice",
+  streak: "Streak",
+  social: "Social",
+  milestone: "Milestone",
+  special: "Special",
+};
 
 export default function AchievementsPage() {
-  const { user } = useAuth();
-  const unlocked = allAchievements.filter((a) => a.unlocked).length;
+  const { data, isLoading, error, refetch } = useQuery<Achievement[]>({
+    queryKey: ["achievements"],
+    queryFn: () => users.getAchievements(),
+  });
+
+  if (isLoading) return <PageLoader label="Loading achievements..." />;
+  if (error || !data) {
+    return (
+      <ErrorState
+        title="Failed to load achievements"
+        description="Could not connect to the server. Check your connection and try again."
+        onRetry={() => refetch()}
+      />
+    );
+  }
+
+  const unlocked = data.filter((a) => a.unlocked_at);
+  const unlockedCount = unlocked.length;
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-ink flex items-center gap-2">
-          <Trophy className="h-8 w-8 text-amber-500" />
+        <p className="eyebrow mb-2">Milestones</p>
+        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink flex items-center gap-2">
+          <Trophy className="h-8 w-8 text-amber-500 dark:text-amber-400" />
           Achievements
         </h1>
-        <p className="text-ink-secondary mt-1">{unlocked}/{allAchievements.length} unlocked</p>
+        <p className="text-ink-secondary mt-1">
+          {unlockedCount}/{data.length} unlocked · earn XP as you learn
+        </p>
       </div>
 
       <div className="grid sm:grid-cols-2 gap-4">
-        {allAchievements.map((ach) => (
-          <Card key={ach.name} padding="md" className={!ach.unlocked ? "opacity-50 grayscale" : ""}>
-            <div className="flex items-start gap-4">
-              <div className="text-3xl">{ach.icon}</div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-ink">{ach.name}</h3>
-                  {ach.unlocked && <Star className="h-4 w-4 text-amber-500 fill-amber-500" />}
+        {data.map((ach) => {
+          const isUnlocked = !!ach.unlocked_at;
+          return (
+            <Card
+              key={ach.id}
+              padding="md"
+              className={cn(!isUnlocked && "opacity-60 grayscale")}
+            >
+              <div className="flex items-start gap-4">
+                <div
+                  className={cn(
+                    "text-3xl h-12 w-12 rounded-xl flex items-center justify-center border",
+                    isUnlocked
+                      ? "bg-amber-50 dark:bg-amber-500/10 border-amber-200 dark:border-amber-500/20"
+                      : "bg-surface-tertiary dark:bg-white/5 border-border dark:border-white/10",
+                  )}
+                  aria-hidden="true"
+                >
+                  {ach.icon}
                 </div>
-                <p className="text-sm text-ink-secondary mt-0.5">{ach.desc}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-surface-secondary text-ink-tertiary capitalize">
-                    {ach.category}
-                  </span>
-                  <span className="text-xs text-ink-tertiary">{ach.xp} XP</span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-display font-semibold text-ink">{ach.name}</h3>
+                    {isUnlocked ? (
+                      <Star className="h-4 w-4 text-amber-500 fill-amber-500" aria-label="Unlocked" />
+                    ) : (
+                      <Lock className="h-3.5 w-3.5 text-ink-tertiary" aria-label="Locked" />
+                    )}
+                  </div>
+                  <p className="text-sm text-ink-secondary mt-0.5">{ach.description}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Badge size="sm" variant="outline">
+                      {categoryLabel[ach.category] || ach.category}
+                    </Badge>
+                    <span className="flex items-center gap-1 text-xs text-ink-tertiary">
+                      <Zap className="h-3 w-3 text-amber-400" /> {ach.xp_reward} XP
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </Card>
-        ))}
+            </Card>
+          );
+        })}
       </div>
     </div>
   );

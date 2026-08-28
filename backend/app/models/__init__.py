@@ -121,7 +121,7 @@ class User(Base):
     password_hash = Column(String(255), nullable=False)
     avatar_url = Column(Text, nullable=True)
     bio = Column(Text, nullable=True)
-    role = Column(SAEnum(UserRole), nullable=False, default=UserRole.STUDENT)
+    role = Column(SAEnum(UserRole, values_callable=lambda e: [m.value for m in e]), nullable=False, default=UserRole.STUDENT)
     email_verified = Column(Boolean, nullable=False, default=False)
     is_active = Column(Boolean, nullable=False, default=True)
     preferences = Column(JSON, nullable=False, default=dict)
@@ -222,9 +222,9 @@ class Course(Base):
     long_description = Column(Text, nullable=True)
     learning_objectives = Column(ARRAY(Text), nullable=True)
     prerequisites = Column(ARRAY(Text), nullable=True)
-    difficulty = Column(SAEnum(DifficultyLevel), nullable=False, default=DifficultyLevel.BEGINNER)
+    difficulty = Column(SAEnum(DifficultyLevel, values_callable=lambda e: [m.value for m in e]), nullable=False, default=DifficultyLevel.BEGINNER)
     estimated_duration_minutes = Column(Integer, nullable=True)
-    status = Column(SAEnum(ContentStatus), nullable=False, default=ContentStatus.DRAFT, index=True)
+    status = Column(SAEnum(ContentStatus, values_callable=lambda e: [m.value for m in e]), nullable=False, default=ContentStatus.DRAFT, index=True)
     image_url = Column(Text, nullable=True)
     thumbnail_url = Column(Text, nullable=True)
     language = Column(String(50), nullable=False, default="english")
@@ -238,6 +238,7 @@ class Course(Base):
     is_free = Column(Boolean, nullable=False, default=True)
     display_order = Column(Integer, nullable=False, default=0)
     version = Column(Integer, nullable=False, default=1)
+    source_text = Column(Text, nullable=True)
     author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -277,6 +278,7 @@ class Module(Base):
     estimated_duration_minutes = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (UniqueConstraint("course_id", "slug"),)
 
@@ -295,16 +297,17 @@ class Lesson(Base):
     content = Column(Text, nullable=False)
     content_markdown = Column(Text, nullable=False)
     learning_objectives = Column(ARRAY(Text), nullable=True)
-    difficulty = Column(SAEnum(DifficultyLevel), nullable=False, default=DifficultyLevel.BEGINNER)
+    difficulty = Column(SAEnum(DifficultyLevel, values_callable=lambda e: [m.value for m in e]), nullable=False, default=DifficultyLevel.BEGINNER)
     estimated_duration_minutes = Column(Integer, nullable=True)
     display_order = Column(Integer, nullable=False, default=0)
     skill_tags = Column(ARRAY(Text), nullable=True)
     is_free_preview = Column(Boolean, nullable=False, default=False)
     version = Column(Integer, nullable=False, default=1)
-    status = Column(SAEnum(ContentStatus), nullable=False, default=ContentStatus.DRAFT)
+    status = Column(SAEnum(ContentStatus, values_callable=lambda e: [m.value for m in e]), nullable=False, default=ContentStatus.DRAFT)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     published_at = Column(DateTime(timezone=True), nullable=True)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (UniqueConstraint("module_id", "slug"),)
 
@@ -357,7 +360,7 @@ class Question(Base):
 
     id = uuid_pk()
     quiz_id = Column(UUID(as_uuid=True), ForeignKey("quizzes.id", ondelete="CASCADE"), nullable=False, index=True)
-    question_type = Column(SAEnum(QuestionType), nullable=False, default=QuestionType.MULTIPLE_CHOICE)
+    question_type = Column(SAEnum(QuestionType, values_callable=lambda e: [m.value for m in e]), nullable=False, default=QuestionType.MULTIPLE_CHOICE)
     content = Column(Text, nullable=False)
     explanation = Column(Text, nullable=True)
     points = Column(Integer, nullable=False, default=1)
@@ -392,8 +395,9 @@ class Exercise(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=False)
     instructions = Column(Text, nullable=False)
-    exercise_type = Column(SAEnum(ExerciseType), nullable=False, index=True)
-    difficulty = Column(SAEnum(ExerciseDifficulty), nullable=False, default=ExerciseDifficulty.EASY, index=True)
+    language = Column(String(50), nullable=False, default="python")
+    exercise_type = Column(SAEnum(ExerciseType, values_callable=lambda e: [m.value for m in e]), nullable=False, index=True)
+    difficulty = Column(SAEnum(ExerciseDifficulty, values_callable=lambda e: [m.value for m in e]), nullable=False, default=ExerciseDifficulty.EASY, index=True)
     starter_code = Column(Text, nullable=True)
     solution_code = Column(Text, nullable=False)
     test_code = Column(Text, nullable=True)
@@ -404,6 +408,7 @@ class Exercise(Base):
     display_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     lesson = relationship("Lesson", back_populates="exercises")
     course = relationship("Course", back_populates="exercises")
@@ -431,7 +436,7 @@ class Submission(Base):
     exercise_id = Column(UUID(as_uuid=True), ForeignKey("exercises.id", ondelete="CASCADE"), nullable=False, index=True)
     code = Column(Text, nullable=False)
     language = Column(String(50), nullable=False)
-    status = Column(SAEnum(SubmissionStatus), nullable=False, default=SubmissionStatus.PENDING)
+    status = Column(SAEnum(SubmissionStatus, values_callable=lambda e: [m.value for m in e]), nullable=False, default=SubmissionStatus.PENDING)
     score = Column(Numeric(5, 2), nullable=True)
     execution_time_ms = Column(Integer, nullable=True)
     memory_used_kb = Column(Integer, nullable=True)
@@ -455,7 +460,7 @@ class Project(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=False)
     requirements = Column(Text, nullable=False)
-    difficulty = Column(SAEnum(ExerciseDifficulty), nullable=False, default=ExerciseDifficulty.MEDIUM)
+    difficulty = Column(SAEnum(ExerciseDifficulty, values_callable=lambda e: [m.value for m in e]), nullable=False, default=ExerciseDifficulty.MEDIUM)
     is_capstone = Column(Boolean, nullable=False, default=False)
     estimated_duration_hours = Column(Integer, nullable=True)
     skill_tags = Column(ARRAY(Text), nullable=True)
@@ -576,7 +581,7 @@ class Flashcard(Base):
     lesson_id = Column(UUID(as_uuid=True), ForeignKey("lessons.id", ondelete="CASCADE"), nullable=True)
     front_content = Column(Text, nullable=False)
     back_content = Column(Text, nullable=False)
-    status = Column(SAEnum(FlashcardStatus), nullable=False, default=FlashcardStatus.NEW)
+    status = Column(SAEnum(FlashcardStatus, values_callable=lambda e: [m.value for m in e]), nullable=False, default=FlashcardStatus.NEW)
     ease_factor = Column(Numeric(4, 2), nullable=False, default=2.5)
     interval_days = Column(Integer, nullable=False, default=0)
     repetitions = Column(Integer, nullable=False, default=0)
@@ -671,7 +676,7 @@ class Achievement(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text, nullable=False)
     icon = Column(String(100), nullable=False)
-    category = Column(SAEnum(AchievementCategory), nullable=False)
+    category = Column(SAEnum(AchievementCategory, values_callable=lambda e: [m.value for m in e]), nullable=False)
     xp_reward = Column(Integer, nullable=False, default=0)
     criteria = Column(JSON, nullable=False)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
@@ -757,7 +762,7 @@ class Notification(Base):
 
     id = uuid_pk()
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    type = Column(SAEnum(NotificationType), nullable=False)
+    type = Column(SAEnum(NotificationType, values_callable=lambda e: [m.value for m in e]), nullable=False)
     title = Column(String(255), nullable=False)
     body = Column(Text, nullable=True)
     data = Column(JSON, nullable=True)
@@ -844,3 +849,38 @@ class FeatureFlag(Base):
     rules = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── Quiz Attempts ───────────────────────────────────────────────
+
+class QuizAttempt(Base):
+    __tablename__ = "quiz_attempts"
+
+    id = uuid_pk()
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    quiz_id = Column(UUID(as_uuid=True), ForeignKey("quizzes.id", ondelete="CASCADE"), nullable=False, index=True)
+    score = Column(Numeric(5, 2), nullable=False, default=0)
+    earned_points = Column(Integer, nullable=False, default=0)
+    total_points = Column(Integer, nullable=False, default=0)
+    correct_answers = Column(Integer, nullable=False, default=0)
+    total_questions = Column(Integer, nullable=False, default=0)
+    passed = Column(Boolean, nullable=False, default=False)
+    answers = Column(JSON, nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+
+
+# ── Course Reviews ──────────────────────────────────────────────
+
+class CourseReview(Base):
+    __tablename__ = "course_reviews"
+
+    id = uuid_pk()
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+    rating = Column(Integer, nullable=False)
+    review = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (UniqueConstraint("user_id", "course_id"),)

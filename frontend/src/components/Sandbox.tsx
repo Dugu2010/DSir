@@ -13,6 +13,7 @@ interface SandboxProps {
   height?: string;
   className?: string;
   onRun?: (code: string, output: string) => void;
+  onChange?: (code: string) => void;
 }
 
 // ── Pyodide singleton loader ──────────────────────────
@@ -21,9 +22,10 @@ function loadPyodide(): Promise<any> {
   if (pyodidePromise) return pyodidePromise;
   pyodidePromise = (async () => {
     if (typeof window === "undefined") return null;
-    // Load pyodide via script tag to avoid webpack build-time resolution
+    // Load pyodide via script tag to avoid webpack build-time resolution.
+    // Self-hosted under /public/pyodide so it works fully offline.
     const script = document.createElement("script");
-    script.src = "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/pyodide.js";
+    script.src = "/pyodide/pyodide.js";
     document.head.appendChild(script);
     await new Promise((resolve, reject) => {
       script.onload = resolve;
@@ -31,7 +33,7 @@ function loadPyodide(): Promise<any> {
     });
     // @ts-ignore
     const pyodide = await (window as any).loadPyodide({
-      indexURL: "https://cdn.jsdelivr.net/pyodide/v0.25.0/full/",
+      indexURL: "/pyodide/",
     });
     return pyodide;
   })();
@@ -61,6 +63,7 @@ export default function Sandbox({
   height = "300px",
   className,
   onRun,
+  onChange,
 }: SandboxProps) {
   const [code, setCode] = useState(initialCode);
   const [output, setOutput] = useState("");
@@ -170,7 +173,9 @@ export default function Sandbox({
       if (!ta) return;
       const start = ta.selectionStart;
       const end = ta.selectionEnd;
-      setCode(code.substring(0, start) + "    " + code.substring(end));
+      const next = code.substring(0, start) + "    " + code.substring(end);
+      setCode(next);
+      onChange?.(next);
       requestAnimationFrame(() => {
         ta.selectionStart = ta.selectionEnd = start + 4;
       });
@@ -199,39 +204,39 @@ export default function Sandbox({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border overflow-hidden bg-[#0d1117]",
+        "rounded-2xl border border-border overflow-hidden bg-night-600",
         isFullscreen && "fixed inset-0 z-50 rounded-none",
         className
       )}
       style={{ height: isFullscreen ? "100vh" : height }}
     >
       {/* Toolbar */}
-      <div className="flex items-center h-11 px-3 border-b border-white/10 bg-[#161b22] gap-2">
-        <Terminal className="h-3.5 w-3.5 text-slate-400" />
-        <span className="text-xs font-medium text-slate-300">{langLabel[language]}</span>
+      <div className="flex items-center h-11 px-3 border-b border-paper-50/10 dark:border-white/10 bg-paper-50/5 dark:bg-white/[0.03] gap-2">
+        <Terminal className="h-3.5 w-3.5 text-coral-500 dark:text-coral-400" />
+        <span className="text-xs font-medium font-mono text-paper-50/80 dark:text-ink">{langLabel[language]}</span>
         {pyLoading && (
-          <span className="flex items-center gap-1 text-xs text-amber-400 ml-2">
+          <span className="flex items-center gap-1 text-xs text-amber-500 dark:text-amber-400 ml-2">
             <Loader2 className="h-3 w-3 animate-spin" /> Loading Python...
           </span>
         )}
         <div className="flex-1" />
         <button
           onClick={handleCopy}
-          className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
+          className="p-1.5 rounded-md text-paper-50/50 dark:text-ink-tertiary hover:text-paper-50 dark:hover:text-ink hover:bg-white/5 transition-colors"
           title="Copy code"
         >
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
         </button>
         <button
-          onClick={() => setCode(initialCode)}
-          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
+          onClick={() => { setCode(initialCode); onChange?.(initialCode); }}
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs text-paper-50/50 dark:text-ink-tertiary hover:text-paper-50 dark:hover:text-ink hover:bg-white/5 transition-colors"
           title="Reset"
         >
           <RotateCcw className="h-3.5 w-3.5" />
         </button>
         <button
           onClick={() => setFullscreen(!isFullscreen)}
-          className="p-1.5 rounded-md text-slate-400 hover:text-slate-200 hover:bg-white/5 transition-colors"
+          className="p-1.5 rounded-md text-paper-50/50 dark:text-ink-tertiary hover:text-paper-50 dark:hover:text-ink hover:bg-white/5 transition-colors"
           title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
         >
           {isFullscreen ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
@@ -239,7 +244,7 @@ export default function Sandbox({
         <button
           onClick={runCode}
           disabled={isRunning || (language === "python" && pyLoading)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-600 text-white hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-coral-500 text-night-600 hover:bg-coral-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isRunning ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -256,27 +261,32 @@ export default function Sandbox({
         <textarea
           ref={textareaRef}
           value={code}
-          onChange={(e) => !readOnly && setCode(e.target.value)}
+          onChange={(e) => {
+            if (readOnly) return;
+            const v = e.target.value;
+            setCode(v);
+            onChange?.(v);
+          }}
           onKeyDown={handleKeyDown}
           readOnly={readOnly}
-          className="flex-1 w-full bg-transparent text-slate-300 font-mono text-sm p-4 resize-none outline-none scrollbar-thin"
+          className="flex-1 w-full bg-transparent text-paper-50/90 dark:text-ink font-mono text-sm p-4 resize-none outline-none scrollbar-thin"
           style={{ fontFamily: "'JetBrains Mono', 'Fira Code', monospace", lineHeight: 1.7 }}
           spellCheck={false}
           placeholder={placeholder[language]}
         />
 
         {/* Resize handle */}
-        <div className="h-1 bg-white/5 cursor-row-resize hover:bg-brand-500/50 transition-colors" />
+        <div className="h-1 bg-paper-50/10 dark:bg-white/5 cursor-row-resize hover:bg-coral-500/60 transition-colors" />
 
         {/* Output */}
         <div
           ref={outputRef}
-          className="h-[120px] overflow-y-auto bg-[#0d1017] border-t border-white/5 p-3 font-mono text-xs text-slate-300"
+          className="h-[120px] overflow-y-auto bg-night-600 border-t border-paper-50/10 dark:border-white/5 p-3 font-mono text-xs text-paper-50/80 dark:text-ink-secondary"
         >
           {output ? (
             <pre className="whitespace-pre-wrap break-words">{output}</pre>
           ) : (
-            <span className="text-slate-600 italic">Run code to see output here...</span>
+            <span className="text-paper-50/40 dark:text-ink-tertiary italic">Run code to see output here...</span>
           )}
         </div>
 

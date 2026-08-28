@@ -6,7 +6,8 @@ interface SkeletonProps {
 }
 
 export function Skeleton({ className, variant = "rectangular" }: SkeletonProps) {
-  const base = "animate-shimmer bg-gradient-to-r from-surface-tertiary via-surface-secondary to-surface-tertiary bg-[length:200%_100%]";
+  const base =
+    "animate-shimmer bg-gradient-to-r from-surface-tertiary via-surface-secondary to-surface-tertiary dark:from-white/10 dark:via-white/5 dark:to-white/10 bg-[length:200%_100%]";
 
   const variants = {
     text: "h-4 rounded",
@@ -35,11 +36,11 @@ export function CardSkeleton() {
 export function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Skeleton className="h-24" />
-        <Skeleton className="h-24" />
-        <Skeleton className="h-24" />
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Skeleton className="h-40 lg:col-span-2" />
+        <Skeleton className="h-40" />
       </div>
+      <Skeleton className="h-24" />
       <Skeleton className="h-48" />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Skeleton className="h-64" />

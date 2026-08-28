@@ -8,19 +8,24 @@ from app.models import (
     TechnologyStack, CourseTechnology, ContentStatus, DifficultyLevel,
     UserStats, UserAchievement, Achievement, LessonProgress, Bookmark,
     UserNote, RecentlyViewed, Submission, DailyGoal, Notification,
-    Flashcard, Certificate, AIConversation,
+    Flashcard, Certificate, AIConversation, KnowledgeTopic, UserKnowledge,
+    NotificationType,
 )
 from app.schemas import (
     UserResponse, UserProfileUpdate, UserPreferences, UserStatsResponse,
     EnrollmentResponse, BookmarkCreate, BookmarkResponse,
     UserNoteCreate, UserNoteResponse, PaginatedResponse,
-    NotificationResponse, AchievementResponse,
+    NotificationResponse, AchievementResponse, CertificateResponse,
     FlashcardResponse, DashboardResponse, CourseListItem,
+    DailyGoalUpdate, KnowledgeItemResponse,
 )
 from app.utils.deps import get_current_active_user, require_admin
 from app.utils.security import hash_password, verify_password
+from app.utils.redis import get_cache, set_cache, delete_cache
+from app.services import gamification
+import json
 from datetime import datetime, date, timezone
-from uuid import UUID
+from uuid import UUID, uuid4
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -29,7 +34,19 @@ router = APIRouter(prefix="/users", tags=["Users"])
 
 @router.get("/me", response_model=UserResponse)
 async def get_profile(current_user: User = Depends(get_current_active_user)):
-    return current_user
+    # Try to get cached profile
+    cache_key = f"user:profile:{current_user.id}"
+    cached_profile = await get_cache(cache_key)
+    if cached_profile is not None:
+        return cached_profile
+    
+    # Return current user (which is already fetched from DB via dependency)
+    response = current_user
+    
+    # Cache user profile for 5 minutes
+    await set_cache(cache_key, response, expire=300)
+    
+    return response
 
 
 @router.patch("/me", response_model=UserResponse)
@@ -50,6 +67,11 @@ async def update_profile(
 
     current_user.updated_at = datetime.now(timezone.utc)
     await db.flush()
+    await db.commit()
+    
+    # Invalidate user profile cache
+    await delete_cache(f"user:profile:{current_user.id}")
+    
     return current_user
 
 
@@ -66,19 +88,132 @@ async def update_preferences(
 
 @router.get("/me/stats", response_model=UserStatsResponse)
 async def get_stats(current_user: User = Depends(get_current_active_user), db: AsyncSession = Depends(get_db)):
+    # Try to get cached stats
+    cache_key = f"user:stats:{current_user.id}"
+    cached_stats = await get_cache(cache_key)
+    if cached_stats is not None:
+        return cached_stats
+    
     result = await db.execute(select(UserStats).where(UserStats.user_id == current_user.id))
     stats = result.scalar_one_or_none()
     if not stats:
         stats = UserStats(user_id=current_user.id)
         db.add(stats)
         await db.flush()
+    
+    # Cache user stats for 5 minutes
+    await set_cache(cache_key, stats, expire=300)
+    
     return stats
+
+
+# -- Daily Goal --
+
+@router.put("/me/daily-goal")
+async def update_daily_goal(
+    data: DailyGoalUpdate,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    today = date.today()
+    result = await db.execute(
+        select(DailyGoal).where(DailyGoal.user_id == current_user.id, DailyGoal.goal_date == today)
+    )
+    goal = result.scalar_one_or_none()
+    if not goal:
+        goal = DailyGoal(user_id=current_user.id, goal_date=today)
+        db.add(goal)
+        await db.flush()
+    goal.target_minutes = data.target_minutes
+    goal.target_lessons = data.target_lessons
+    goal.target_exercises = data.target_exercises
+
+    # Persist the minutes preference so tomorrow's goal defaults to it too.
+    prefs = dict(current_user.preferences or {})
+    prefs["daily_goal_minutes"] = data.target_minutes
+    current_user.preferences = prefs
+
+    await delete_cache(f"user:dashboard:{current_user.id}")
+    return {
+        "detail": "Daily goal updated",
+        "daily_goal": {
+            "target_minutes": goal.target_minutes,
+            "target_lessons": goal.target_lessons,
+            "target_exercises": goal.target_exercises,
+            "actual_minutes": goal.actual_minutes,
+            "actual_lessons": goal.actual_lessons,
+            "actual_exercises": goal.actual_exercises,
+            "is_completed": goal.is_completed,
+        },
+    }
+
+
+# -- Achievements Catalog --
+
+@router.get("/me/achievements", response_model=list[AchievementResponse])
+async def get_achievements(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Return the full achievement catalog with unlocked status for this user."""
+    all_result = await db.execute(select(Achievement).order_by(Achievement.created_at))
+    all_achs = all_result.scalars().all()
+
+    unlocked_result = await db.execute(
+        select(UserAchievement.achievement_id, UserAchievement.unlocked_at)
+        .where(UserAchievement.user_id == current_user.id)
+    )
+    unlocked = {str(ua[0]): ua[1] for ua in unlocked_result.all()}
+
+    return [
+        AchievementResponse(
+            id=a.id,
+            name=a.name,
+            description=a.description,
+            icon=a.icon,
+            category=a.category.value if hasattr(a.category, "value") else str(a.category),
+            xp_reward=a.xp_reward,
+            unlocked_at=unlocked.get(str(a.id)),
+        )
+        for a in all_achs
+    ]
+
+
+# -- Knowledge / Mastery --
+
+@router.get("/me/knowledge", response_model=list[KnowledgeItemResponse])
+async def get_knowledge(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(KnowledgeTopic, UserKnowledge)
+        .join(UserKnowledge, UserKnowledge.topic_id == KnowledgeTopic.id)
+        .where(UserKnowledge.user_id == current_user.id)
+        .order_by(UserKnowledge.mastery_level.desc())
+    )
+    return [
+        KnowledgeItemResponse(
+            topic=topic.name,
+            slug=topic.slug,
+            mastery_level=float(uk.mastery_level),
+            confidence=float(uk.confidence),
+            assessment_count=uk.assessment_count,
+        )
+        for topic, uk in result.all()
+    ]
 
 
 # -- Dashboard --
 
 @router.get("/me/dashboard", response_model=DashboardResponse)
 async def get_dashboard(current_user: User = Depends(get_current_active_user), db: AsyncSession = Depends(get_db)):
+    # Try to get cached dashboard
+    cache_key = f"user:dashboard:{current_user.id}"
+    cached_dashboard = await get_cache(cache_key)
+    if cached_dashboard is not None:
+        return cached_dashboard
+    
     # Stats
     stats_result = await db.execute(select(UserStats).where(UserStats.user_id == current_user.id))
     stats = stats_result.scalar_one_or_none()
@@ -158,7 +293,7 @@ async def get_dashboard(current_user: User = Depends(get_current_active_user), d
     )
     recommended = recommended_result.scalars().all()
 
-    return DashboardResponse(
+    response = DashboardResponse(
         user=UserResponse.model_validate(current_user),
         stats=UserStatsResponse.model_validate(stats),
         continue_learning=[EnrollmentResponse.model_validate(e) for e in enrollments],
@@ -167,6 +302,11 @@ async def get_dashboard(current_user: User = Depends(get_current_active_user), d
         achievements=achievements,
         recommended_courses=[CourseListItem.model_validate(c) for c in recommended],
     )
+    
+    # Cache dashboard for 2 minutes
+    await set_cache(cache_key, response, expire=120)
+    
+    return response
 
 
 # -- Enrollments --
@@ -205,7 +345,63 @@ async def enroll_course(
     enrollment = Enrollment(user_id=current_user.id, course_id=course_id)
     db.add(enrollment)
     course.enrollment_count = (course.enrollment_count or 0) + 1
+    await gamification.notify(
+        db, current_user.id, NotificationType.COURSE,
+        f"Enrolled in {course.title} 🎉",
+        "Start your first lesson to begin learning.",
+        {"course_slug": course.slug},
+    )
     return {"detail": "Enrolled successfully"}
+
+
+# -- Certificates --
+
+@router.get("/me/certificates", response_model=list[CertificateResponse])
+async def get_certificates(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    # Idempotently issue a certificate for every completed enrollment that
+    # doesn't have one yet (keeps existing completions retroactively valid).
+    completed = await db.execute(
+        select(Enrollment).where(
+            Enrollment.user_id == current_user.id,
+            Enrollment.is_completed == True,
+        )
+    )
+    for enrollment in completed.scalars().all():
+        existing = await db.execute(
+            select(Certificate).where(
+                Certificate.user_id == current_user.id,
+                Certificate.course_id == enrollment.course_id,
+            )
+        )
+        if existing.scalar_one_or_none() is None:
+            db.add(Certificate(
+                user_id=current_user.id,
+                course_id=enrollment.course_id,
+                certificate_number=f"DSIR-{uuid4().hex[:12].upper()}",
+                issued_at=enrollment.completed_at or datetime.now(timezone.utc),
+            ))
+    await db.flush()
+
+    result = await db.execute(
+        select(Certificate, Course.title, Course.slug)
+        .join(Course, Course.id == Certificate.course_id)
+        .where(Certificate.user_id == current_user.id)
+        .order_by(Certificate.issued_at.desc())
+    )
+    return [
+        CertificateResponse(
+            id=cert.id,
+            course_id=cert.course_id,
+            certificate_number=cert.certificate_number,
+            issued_at=cert.issued_at,
+            course_title=title,
+            course_slug=slug,
+        )
+        for cert, title, slug in result.all()
+    ]
 
 
 # -- Bookmarks --

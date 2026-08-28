@@ -3,38 +3,69 @@
 @tailwind utilities;
 
 @layer base {
+  /* ── DSir Academy editorial tokens ───────────────────────────────
+     Light = warm paper + deep navy ink (reference landing).
+     Dark  = deep near-black navy derived from ink, warm paper text,
+             coral accent. Dark is the DEFAULT experience. */
   :root {
-    --toast-bg: #ffffff;
-    --toast-color: #1a1d2e;
+    --surface: 251 247 238; /* paper-light #FBF7EE */
+    --surface-secondary: 244 239 230; /* paper #F4EFE6 */
+    --surface-tertiary: 232 222 201; /* paper-dark #E8DEC9 */
+    --ink: 11 23 41; /* deep navy #0B1729 */
+    --ink-secondary: 92 88 80; /* warm muted */
+    --ink-tertiary: 133 128 118; /* warm stone */
+    --ink-inverse: 255 255 255;
+    --border: 217 210 194; /* #D9D2C2 */
+    --border-light: 232 222 201; /* paper-dark */
+    --toast-bg: #FBF7EE;
+    --toast-color: #0B1729;
   }
 
   .dark {
-    --toast-bg: #1a1a24;
-    --toast-color: #e4e4ec;
+    --surface: 17 24 39;           /* #111827 card surface — matches landing dm-surface */
+    --surface-secondary: 8 13 24;  /* #080d18 page bg — matches landing dm-bg */
+    --surface-tertiary: 26 34 54;  /* #1a2236 elevated — matches landing dm-surface2 */
+    --ink: 228 233 242;            /* #e4e9f2 primary text — matches landing dm-text */
+    --ink-secondary: 150 163 189;  /* #96a3bd secondary — matches landing dm-text-muted */
+    --ink-tertiary: 100 112 138;   /* #64708a tertiary — matches landing dm-text-dim */
+    --ink-inverse: 8 13 24;        /* #080d18 — text on coral/accent */
+    --border: 42 53 80;            /* #2a3550 — matches landing dm-border */
+    --border-light: 31 42 61;      /* #1f2a3d — matches landing dm-border-sub */
+    --toast-bg: #111827;
+    --toast-color: #e4e9f2;
   }
 
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    scroll-behavior: smooth;
   }
 
   body {
     font-feature-settings: "rlig" 1, "calt" 1;
+    background-color: rgb(var(--surface-secondary));
+    color: rgb(var(--ink));
   }
 
-  /* Select styling */
+  /* Accessible, theme-aware focus indicator */
+  :focus-visible {
+    outline: 2px solid rgb(var(--coral-focus, 255 92 57));
+    outline-offset: 2px;
+  }
+
+  /* Select styling — theme aware */
   select {
     -webkit-appearance: none;
     appearance: none;
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%236b7280' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%235C5850' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
     background-repeat: no-repeat;
     background-position: right 0.75rem center;
     padding-right: 2.25rem;
   }
 
   .dark select {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%238b8fa3' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none'%3E%3Cpath d='M3 5l3 3 3-3' stroke='%238A8F99' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
   }
 
   /* Scrollbar */
@@ -43,34 +74,77 @@
     height: 6px;
   }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 9999px; }
-  .dark ::-webkit-scrollbar-thumb { background: #374151; }
-  ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
-  .dark ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+  ::-webkit-scrollbar-thumb { background: #c9c2b2; border-radius: 9999px; }
+  .dark ::-webkit-scrollbar-thumb { background: #2A3552; }
+  ::-webkit-scrollbar-thumb:hover { background: #b3ab97; }
+  .dark ::-webkit-scrollbar-thumb:hover { background: #3A4A75; }
+
+  /* Respect users who prefer reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
 @layer components {
-  .prose-lesson h1 { @apply text-2xl font-bold text-[#1a1d2e] dark:text-white mt-12 mb-6 tracking-tight; }
-  .prose-lesson h2 { @apply text-xl font-bold text-[#1a1d2e] dark:text-white mt-10 mb-4 tracking-tight; }
-  .prose-lesson h3 { @apply text-lg font-semibold text-[#1a1d2e] dark:text-white mt-8 mb-3; }
-  .prose-lesson h4 { @apply text-base font-semibold text-[#1a1d2e] dark:text-white mt-6 mb-2; }
-  .prose-lesson p { @apply mb-4 leading-7 text-[#4b5563] dark:text-[#a0a5b8]; }
-  .prose-lesson ul, .prose-lesson ol { @apply mb-4 pl-6; }
-  .prose-lesson li { @apply mb-1 text-[#4b5563] dark:text-[#a0a5b8] list-disc; }
-  .prose-lesson ol li { @apply list-decimal; }
-  .prose-lesson code { @apply bg-[#f1f3f5] dark:bg-white/5 text-brand-700 dark:text-brand-400 px-1.5 py-0.5 rounded-md text-sm font-mono; }
-  .prose-lesson pre { @apply bg-[#f8f9fa] dark:bg-[#0d0d13] p-5 rounded-2xl overflow-x-auto mb-6 border border-[#e8ecf1] dark:border-white/5; }
-  .prose-lesson pre code { @apply bg-transparent text-inherit p-0 text-sm leading-relaxed; }
-  .prose-lesson blockquote { @apply border-l-4 border-brand-400 dark:border-brand-600 pl-4 py-1.5 mb-4 text-[#6b7280] dark:text-[#8b8fa3] italic bg-brand-50/50 dark:bg-brand-500/5 rounded-r-lg; }
-  .prose-lesson a { @apply text-brand-600 dark:text-brand-400 hover:underline font-medium; }
-  .prose-lesson strong { @apply font-semibold text-[#1a1d2e] dark:text-white; }
-  .prose-lesson hr { @apply my-8 border-[#e8ecf1] dark:border-white/5; }
-  .prose-lesson table { @apply w-full mb-4 border-collapse; }
-  .prose-lesson th { @apply text-left font-semibold p-3 border-b-2 border-[#e8ecf1] dark:border-white/10 bg-[#f8f9fa] dark:bg-white/5; }
-  .prose-lesson td { @apply p-3 border-b border-[#e8ecf1] dark:border-white/5; }
+  /* ── Editorial building blocks ─────────────────────────────────── */
 
-  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #d1d5db transparent; }
-  .dark .scrollbar-thin { scrollbar-color: #374151 transparent; }
+  /* Uppercase mono micro-label with a coral dash prefix.
+     Usage: <p class="eyebrow">No. 01 — Master the craft</p> */
+  .eyebrow {
+    @apply font-mono text-[11px] font-medium uppercase tracking-eyebrow text-coral-600 dark:text-coral-400;
+  }
+  .eyebrow::before {
+    content: "— ";
+    @apply text-coral-500 dark:text-coral-400;
+  }
+
+  /* Serif display heading */
+  .display {
+    @apply font-display font-semibold tracking-tight text-ink;
+  }
+
+  /* Inline coral-underline highlight for headline words */
+  .highlight-coral {
+    background-image: linear-gradient(
+      to top,
+      rgb(255 92 57 / 0.28) 0%,
+      rgb(255 92 57 / 0.28) 32%,
+      transparent 32%
+    );
+    @apply px-0.5;
+  }
+
+  /* Lesson content typography — calm, readable, WCAG AA in both themes */
+  .prose-lesson h1 { @apply font-display text-2xl font-bold text-ink dark:text-ink mt-12 mb-6 tracking-tight; }
+  .prose-lesson h2 { @apply font-display text-xl font-bold text-ink dark:text-ink mt-10 mb-4 tracking-tight; }
+  .prose-lesson h3 { @apply font-display text-lg font-semibold text-ink dark:text-ink mt-8 mb-3; }
+  .prose-lesson h4 { @apply text-base font-semibold text-ink dark:text-ink mt-6 mb-2; }
+  .prose-lesson p { @apply mb-4 leading-7 text-ink-secondary dark:text-ink-secondary; }
+  .prose-lesson ul, .prose-lesson ol { @apply mb-4 pl-6; }
+  .prose-lesson li { @apply mb-1 text-ink-secondary dark:text-ink-secondary list-disc; }
+  .prose-lesson ol li { @apply list-decimal; }
+  .prose-lesson code { @apply bg-surface-tertiary text-coral-700 dark:bg-white/10 dark:text-coral-400 px-1.5 py-0.5 rounded-md text-sm font-mono; }
+  .prose-lesson pre { @apply bg-night-700 dark:bg-night-800 p-5 rounded-2xl overflow-x-auto mb-6 border border-border dark:border-white/10; }
+  .prose-lesson pre code { @apply bg-transparent text-inherit p-0 text-[13px] leading-relaxed; }
+  .prose-lesson blockquote { @apply border-l-4 border-coral-500 pl-4 py-1.5 mb-4 text-ink-secondary dark:text-ink-secondary italic bg-coral-50/60 dark:bg-coral-500/5 rounded-r-lg; }
+  .prose-lesson a { @apply text-coral-700 dark:text-coral-400 hover:underline font-medium; }
+  .prose-lesson strong { @apply font-semibold text-ink dark:text-ink; }
+  .prose-lesson hr { @apply my-8 border-border dark:border-white/10; }
+  .prose-lesson table { @apply w-full mb-4 border-collapse; }
+  .prose-lesson th { @apply text-left font-semibold p-3 border-b-2 border-border dark:border-white/10 bg-surface-tertiary; }
+  .prose-lesson td { @apply p-3 border-b border-border dark:border-white/5; }
+
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #c9c2b2 transparent; }
+  .dark .scrollbar-thin { scrollbar-color: #2A3552 transparent; }
   .scrollbar-thin::-webkit-scrollbar { width: 5px; }
 }
 

@@ -10,8 +10,11 @@ from app.models import (
 from app.schemas import (
     ExerciseResponse, ExerciseDetailResponse,
     CodeSubmission, SubmissionResponse, PaginatedResponse,
+    ProjectDetailResponse, ProjectSubmitRequest, ProjectSubmissionResponse,
 )
 from app.utils.deps import get_current_active_user
+from app.services import gamification
+from app.services import code_runner
 from app.models import User
 from uuid import UUID
 from datetime import datetime, timezone, date
@@ -90,9 +93,14 @@ async def get_exercise(
     )
     hints = [{"level": h.hint_level, "content": h.content, "cost_percentage": h.cost_percentage} for h in hints_result.scalars().all()]
 
-    resp = ExerciseDetailResponse.model_validate(exercise)
-    resp.hints = hints
-    resp.test_count = len(exercise.test_code.split("\n")) if exercise.test_code else 0
+    # Build from the base model (ExerciseResponse) so the ORM's `hints`
+    # (list[str]) never collides with the detail schema's `hints` (list[dict]),
+    # then attach the structured hints + test count explicitly.
+    resp = ExerciseDetailResponse(
+        **ExerciseResponse.model_validate(exercise).model_dump(),
+        hints=hints,
+        test_count=len(exercise.test_code.split("\n")) if exercise.test_code else 0,
+    )
     return resp
 
 
@@ -127,86 +135,36 @@ async def submit_solution(
         attempt_number=attempt_number,
     )
 
-    # Run basic validation (in production, this would run in a sandbox)
-    score, test_results, error = _evaluate_submission(data.code, exercise)
+    # Real execution: run the submitted code against the exercise's tests.
+    result = code_runner.run_tests(
+        code=data.code,
+        language=data.language,
+        test_code=exercise.test_code or "",
+    )
+
+    total = result["total"]
+    passed = result["passed"]
+    score = (passed / total * 100) if total > 0 else 0.0
 
     submission.status = SubmissionStatus.PASSED if score >= 80 else SubmissionStatus.FAILED
-    submission.score = score
-    submission.test_results = test_results
-    submission.error_message = error
+    submission.score = round(score, 1)
+    submission.test_results = result
+    submission.error_message = result.get("error")
 
     db.add(submission)
     await db.flush()
 
-    # Update user stats
-    stats_result = await db.execute(select(UserStats).where(UserStats.user_id == current_user.id))
-    stats = stats_result.scalar_one_or_none()
-    if stats:
-        stats.exercises_completed += 1 if submission.status == SubmissionStatus.PASSED else 0
-        stats.total_xp += exercise.points if submission.status == SubmissionStatus.PASSED else 0
-        stats.last_activity_date = date.today()
+    # Gamification: XP + streak + daily goal + achievements on pass.
+    if submission.status == SubmissionStatus.PASSED:
+        await gamification.add_xp(db, current_user, exercise.points)
+        stats = await gamification.record_activity(
+            db, current_user, exercises=1, minutes=exercise.estimated_duration_minutes or 5
+        )
+        stats.exercises_completed += 1
+    else:
+        await gamification.record_activity(db, current_user)
 
     return submission
-
-
-def _evaluate_submission(code: str, exercise: Exercise) -> tuple:
-    """Basic code evaluation. In production, delegates to sandbox service."""
-    score = 0.0
-    test_results = {"passed": 0, "failed": 0, "total": 0, "details": []}
-    error = None
-
-    try:
-        # Check for obviously empty or placeholder code
-        code_stripped = code.strip()
-        if not code_stripped or code_stripped in ("# your code here", "// your code here", "pass", ""):
-            return 0.0, test_results, "No code submitted"
-
-        # Check for syntax errors in simple cases
-        if exercise.language == "python":
-            try:
-                compile(code, "<submission>", "exec")
-            except SyntaxError as e:
-                return 20.0, test_results, f"Syntax error: {str(e)}"
-
-        # Run basic test assertions embedded in test_code
-        if exercise.test_code:
-            test_cases = [t.strip() for t in exercise.test_code.split("\n") if t.strip() and "assert" in t.lower()]
-            test_results["total"] = max(len(test_cases), 1)
-            passed = 0
-
-            # Check if solution code patterns exist
-            solution_keywords = [w for w in exercise.solution_code.split() if len(w) > 3 and w.isalpha()]
-            code_keywords = set(code.split())
-            matches = sum(1 for kw in solution_keywords if kw in code_keywords)
-            match_ratio = matches / max(len(solution_keywords), 1)
-
-            for tc in test_cases:
-                # Simple heuristic matching
-                if any(word in code for word in tc.split() if len(word) > 3):
-                    passed += 1
-                    test_results["details"].append({"test": tc, "passed": True})
-                else:
-                    test_results["details"].append({"test": tc, "passed": False})
-
-            test_results["passed"] = passed
-            test_results["failed"] = test_results["total"] - passed
-
-            if test_results["total"] > 0:
-                score = (passed / test_results["total"]) * 100
-            else:
-                score = match_ratio * 100
-        else:
-            score = 100.0
-            test_results["total"] = 1
-            test_results["passed"] = 1
-
-        score = min(round(score, 1), 100.0)
-
-    except Exception as e:
-        error = str(e)
-        score = 10.0
-
-    return score, test_results, error
 
 
 # ── Submission History ──────────────────────────────────────────
@@ -291,3 +249,86 @@ async def list_projects(
         size=size,
         pages=(total + size - 1) // size,
     )
+
+
+# ── Project Submissions (user history) — MUST be before {project_id} routes ──
+
+@router.get("/projects/submissions", response_model=PaginatedResponse)
+async def get_project_submissions(
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    count_query = select(func.count(ProjectSubmission.id)).where(
+        ProjectSubmission.user_id == current_user.id
+    )
+    total = (await db.execute(count_query)).scalar()
+
+    result = await db.execute(
+        select(ProjectSubmission)
+        .where(ProjectSubmission.user_id == current_user.id)
+        .order_by(ProjectSubmission.submitted_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    submissions = result.scalars().all()
+
+    return PaginatedResponse(
+        items=[ProjectSubmissionResponse.model_validate(s) for s in submissions],
+        total=total,
+        page=page,
+        size=size,
+        pages=(total + size - 1) // size if total > 0 else 0,
+    )
+
+
+# ── Project Detail ──────────────────────────────────────────────
+
+@router.get("/projects/{project_id}", response_model=ProjectDetailResponse)
+async def get_project(
+    project_id: UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    return project
+
+
+# ── Project Submission ──────────────────────────────────────────
+
+@router.post("/projects/{project_id}/submit", response_model=ProjectSubmissionResponse, status_code=status.HTTP_201_CREATED)
+async def submit_project(
+    project_id: UUID,
+    data: ProjectSubmitRequest,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(select(Project).where(Project.id == project_id))
+    project = result.scalar_one_or_none()
+    if not project:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
+
+    submission = ProjectSubmission(
+        user_id=current_user.id,
+        project_id=project_id,
+        code_files=data.code_files,
+        review_status="pending",
+    )
+    db.add(submission)
+
+    # Update user stats
+    stats_result = await db.execute(select(UserStats).where(UserStats.user_id == current_user.id))
+    stats = stats_result.scalar_one_or_none()
+    if stats:
+        stats.projects_completed += 1
+        stats.last_activity_date = date.today()
+
+    await db.flush()
+    await db.commit()
+
+    return submission

@@ -20,3 +20,13 @@ google-generativeai>=0.8,<1.0
 pdfplumber>=0.10,<1.0
 PyPDF2>=3.0,<4.0
 Pillow>=10.0,<12.0
+safety>=2.0,<3.0
+# Observability & Monitoring
+opentelemetry-api>=1.20,<2.0
+opentelemetry-sdk>=1.20,<2.0
+opentelemetry-instrumentation-fastapi>=0.42b,<1.0
+opentelemetry-instrumentation-sqlalchemy>=0.42b,<1.0
+opentelemetry-instrumentation-redis>=0.42b,<1.0
+prometheus-client>=0.19,<1.0
+# Background tasks
+celery>=5.4,<6.0

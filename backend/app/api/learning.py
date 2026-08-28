@@ -6,6 +6,7 @@ from app.models import (
     Course, Module, Lesson, ContentStatus, LessonProgress,
     RecentlyViewed, Enrollment, Bookmark, UserNote,
     Exercise, Quiz, Question, QuestionOption, Submission,
+    NotificationType,
 )
 from app.schemas import (
     LessonCreate, LessonUpdate, LessonResponse, LessonProgressUpdate,
@@ -13,6 +14,7 @@ from app.schemas import (
     CodeSubmission, SubmissionResponse,
 )
 from app.utils.deps import get_current_active_user, require_teacher, get_optional_user
+from app.services import gamification
 from app.models import User
 from uuid import UUID
 from datetime import datetime, timezone
@@ -140,6 +142,7 @@ async def update_lesson_progress(
         progress = LessonProgress(user_id=current_user.id, lesson_id=lesson.id)
         db.add(progress)
 
+    was_completed = progress.is_completed
     if data.is_completed is not None:
         progress.is_completed = data.is_completed
         if data.is_completed and not progress.completed_at:
@@ -150,6 +153,17 @@ async def update_lesson_progress(
         progress.completion_percentage = data.completion_percentage
     if data.last_position is not None:
         progress.last_position = data.last_position
+
+    # First-time completion → XP, streak, daily goal, achievements, mastery.
+    if progress.is_completed and not was_completed:
+        stats = await gamification.update_streak(db, current_user)
+        stats.lessons_completed += 1
+        await gamification.add_xp(db, current_user, 10)
+        await gamification.record_daily_goal(
+            db, current_user, lessons=1, minutes=lesson.estimated_duration_minutes or 5
+        )
+        await gamification.update_knowledge(db, current_user, lesson.skill_tags)
+        await gamification.check_achievements(db, current_user)
 
     # Update course progress
     if progress.is_completed:
@@ -198,6 +212,22 @@ async def _recalculate_course_progress(user_id: UUID, module_id: UUID, db: Async
             if percentage >= 100 and not enrollment.is_completed:
                 enrollment.is_completed = True
                 enrollment.completed_at = datetime.now(timezone.utc)
+                # Course finished → notify, XP, achievements, certificate hook.
+                course = (await db.execute(
+                    select(Course).where(Course.id == module.course_id)
+                )).scalar_one_or_none()
+                user = (await db.execute(
+                    select(User).where(User.id == user_id)
+                )).scalar_one_or_none()
+                if course and user:
+                    await gamification.notify(
+                        db, user.id, NotificationType.COURSE,
+                        f"Course completed: {course.title} 🎓",
+                        "Congratulations! Your certificate is now available.",
+                        {"course_slug": course.slug},
+                    )
+                    await gamification.add_xp(db, user, 100)
+                    await gamification.check_achievements(db, user)
 
 
 # ── Recently Viewed ─────────────────────────────────────────────

@@ -9,7 +9,9 @@ from app.models import User as UserModel
 from uuid import UUID, uuid4
 from datetime import datetime, timezone, timedelta
 import structlog, asyncio
+from app.config import get_settings
 
+settings = get_settings()
 logger = structlog.get_logger()
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
@@ -106,38 +108,81 @@ async def analytics_overview(admin_user: UserModel = Depends(require_admin), db:
 
 @router.post("/ai/preview")
 async def ai_preview(file: UploadFile = File(...), topic: str = Query(default=""), admin_user: UserModel = Depends(require_admin)):
-    from app.services.ai_content import extract_text, generate_structure_preview
+    from app.services.ai_content import extract_text, generate_structure_preview, ai_provider_available
+    if not ai_provider_available():
+        raise HTTPException(status_code=503, detail="No AI provider configured. Set GEMINI_API_KEY (or OPENAI_API_KEY) in backend/.env and restart the server.")
     data = await file.read()
     if not data: raise HTTPException(status_code=400, detail="Empty file")
     logger.info("ai.preview.start", file=file.filename, size=len(data))
-    raw_text = extract_text(data, file.filename or "")
+    try:
+        raw_text = extract_text(data, file.filename or "")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Could not read file: {str(e)[:200]}")
     if not raw_text or len(raw_text.strip()) < 50:
         raise HTTPException(status_code=400, detail=f"Could not extract enough text. Extracted {len(raw_text)} chars.")
     logger.info("ai.preview.extracted", text_len=len(raw_text))
-    structure = await asyncio.to_thread(generate_structure_preview, raw_text, topic)
+    # Stage the full source text so the import step can ground every lesson
+    # and quiz in the actual book content (not just the sampled preview).
+    from app.utils.redis import set_cache
+    source_id = uuid4().hex
+    staged = await set_cache(f"ai_source:{source_id}", raw_text, expire=7200)
+    try:
+        structure = await asyncio.to_thread(generate_structure_preview, raw_text, topic)
+    except Exception as e:
+        logger.error("ai.preview.failed", error=str(e)[:200])
+        raise HTTPException(status_code=502, detail=f"AI generation failed: {str(e)[:200]}")
     mod_count = len(structure.get("modules", [])); les_count = sum(len(m.get("lessons", [])) for m in structure.get("modules", []))
-    return {"success": True, "text_length": len(raw_text), "text_preview": raw_text[:1500], "structure": structure, "summary": {"title": structure.get("course", {}).get("title", ""), "modules": mod_count, "lessons": les_count, "difficulty": structure.get("course", {}).get("difficulty", ""), "description": structure.get("course", {}).get("description", ""), "skill_tags": structure.get("course", {}).get("skill_tags", [])}, "modules_preview": [{"title": m.get("title", ""), "lessons": [l.get("title", "") for l in m.get("lessons", [])]} for m in structure.get("modules", [])]}
+    return {"success": True, "source_id": source_id if staged else "", "text_length": len(raw_text), "text_preview": raw_text[:1500], "structure": structure, "summary": {"title": structure.get("course", {}).get("title", ""), "modules": mod_count, "lessons": les_count, "difficulty": structure.get("course", {}).get("difficulty", ""), "description": structure.get("course", {}).get("description", ""), "skill_tags": structure.get("course", {}).get("skill_tags", [])}, "modules_preview": [{"title": m.get("title", ""), "lessons": [l.get("title", "") for l in m.get("lessons", [])]} for m in structure.get("modules", [])]}
 
 
 @router.post("/ai/import", response_model=AICourseImportResponse)
 async def ai_import_course(background_tasks: BackgroundTasks, structure: dict = Body(...), admin_user: UserModel = Depends(require_admin), db: AsyncSession = Depends(get_db)):
+    from app.services.ai_content import ai_provider_available
+    if not ai_provider_available():
+        raise HTTPException(status_code=503, detail="No AI provider configured. Set GEMINI_API_KEY (or OPENAI_API_KEY) in backend/.env and restart the server.")
     c = structure.get("course", {}); modules_data = structure.get("modules", [])
     if not c or not modules_data: raise HTTPException(status_code=400, detail="Missing course or modules")
+
+    # Retrieve the full source text staged during preview so lessons and
+    # quizzes are grounded in the actual document (not just the sampled preview).
+    source_id = structure.pop("source_id", "") or ""
+    source_text = ""
+    if source_id:
+        from app.utils.redis import get_cache, delete_cache
+        source_text = await get_cache(f"ai_source:{source_id}") or ""
+        if source_text:
+            await delete_cache(f"ai_source:{source_id}")
+
     slug = c.get("slug", "ai-course"); existing = await db.execute(select(Course).where(Course.slug == slug))
     if existing.scalar_one_or_none(): slug = f"{slug}-{uuid4().hex[:6]}"
     now = datetime.now(timezone.utc)
-    course = Course(id=uuid4(), title=c.get("title", "Course"), slug=slug, description=c.get("description", ""), long_description=c.get("long_description", ""), difficulty=DifficultyLevel(c.get("difficulty", "beginner")), estimated_duration_minutes=c.get("estimated_duration_minutes", 600), learning_objectives=c.get("learning_objectives", []), skill_tags=c.get("skill_tags", []), status=ContentStatus.PUBLISHED, published_at=now, is_featured=False, is_free=True, author_id=admin_user.id, enrollment_count=0, rating_average=0.0, rating_count=0, module_count=len(modules_data), lesson_count=sum(len(m.get("lessons", [])) for m in modules_data))
+    course = Course(id=uuid4(), title=c.get("title", "Course"), slug=slug, description=c.get("description", ""), long_description=c.get("long_description", ""), difficulty=DifficultyLevel(c.get("difficulty", "beginner")), estimated_duration_minutes=c.get("estimated_duration_minutes", 600), learning_objectives=c.get("learning_objectives", []), skill_tags=c.get("skill_tags", []), status=ContentStatus.PUBLISHED, published_at=now, is_featured=False, is_free=True, author_id=admin_user.id, enrollment_count=0, rating_average=0.0, rating_count=0, module_count=len(modules_data), lesson_count=sum(len(m.get("lessons", [])) for m in modules_data), source_text=source_text or None)
     db.add(course); await db.flush()
     total_lessons = 0; course_title = c.get("title", "Course")
+    lesson_ids = []
+    module_quiz_jobs = []
     for mi, mod in enumerate(modules_data):
         module = Module(id=uuid4(), course_id=course.id, title=mod.get("title", f"Module {mi+1}"), slug=mod.get("slug", f"module-{mi+1}"), description=mod.get("description", ""), display_order=mi+1, lesson_count=len(mod.get("lessons", [])))
         db.add(module); await db.flush()
+        lesson_titles = []
         for li, les in enumerate(mod.get("lessons", [])):
             lesson = Lesson(id=uuid4(), module_id=module.id, title=les.get("title", f"L{li+1}"), slug=les.get("slug", f"lesson-{li+1}"), description=les.get("description", ""), content="Generating content...", content_markdown="Generating content...", learning_objectives=les.get("learning_objectives", []), difficulty=DifficultyLevel(les.get("difficulty", "beginner")), estimated_duration_minutes=les.get("estimated_duration_minutes", 30), display_order=li+1, skill_tags=les.get("skill_tags", []), status=ContentStatus.PUBLISHED)
+            lesson_ids.append((str(lesson.id), mod.get("title", f"Module {mi+1}"), les.get("title", f"L{li+1}")))
+            lesson_titles.append(les.get("title", f"L{li+1}"))
             db.add(lesson); total_lessons += 1
+        module_quiz_jobs.append((str(module.id), mod.get("title", f"Module {mi+1}"), lesson_titles))
     await db.commit()
-    background_tasks.add_task(_bg_generate_lessons, str(course.id), course_title, modules_data)
-    logger.info("ai.import.queued", slug=slug, lessons=total_lessons)
+
+    # Generate lesson content + per-module quizzes in-process (no separate
+    # Celery worker required). Each task opens its own DB session so it can run
+    # after this request returns without holding the request's session open.
+    from app.tasks.ai_tasks import generate_lesson_content_inline, generate_module_quiz_inline
+    for lesson_id, module_title, lesson_title in lesson_ids:
+        background_tasks.add_task(generate_lesson_content_inline, lesson_id, course_title, module_title, lesson_title)
+    for module_id, module_title, lesson_titles in module_quiz_jobs:
+        background_tasks.add_task(generate_module_quiz_inline, module_id, course_title, module_title, lesson_titles)
+
+    logger.info("ai.import.queued", slug=slug, lessons=total_lessons, quizzes=len(module_quiz_jobs), grounded=bool(source_text), queue_mode="background-tasks")
     return AICourseImportResponse(course_id=course.id, course_slug=slug, module_count=len(modules_data), lesson_count=total_lessons, exercise_count=0)
 
 
@@ -155,30 +200,96 @@ async def ai_import_status(course_slug: str, admin_user: UserModel = Depends(req
     return {"generated": generated, "total": total, "done": generated >= total, "lessons": ls}
 
 
-async def _bg_generate_lessons(course_id_str: str, course_title: str, modules_data: list):
-    from app.database import async_session_factory; from app.services.ai_content import generate_lesson_content
-    from app.models import Module as M, Lesson as L, Exercise as E, ExerciseType as ET, ExerciseDifficulty as ED
-    logger.info("bg.gen.start", course=course_title, modules=len(modules_data))
-    async with async_session_factory() as db:
-        course_id = UUID(course_id_str); generated = failed = 0
-        for mod_data in modules_data:
-            mod_slug = mod_data.get("slug", ""); result = await db.execute(select(M).where(M.course_id == course_id, M.slug == mod_slug)); module = result.scalar_one_or_none()
-            if not module: continue
-            for les_data in mod_data.get("lessons", []):
-                les_slug = les_data.get("slug", ""); result = await db.execute(select(L).where(L.module_id == module.id, L.slug == les_slug)); lesson = result.scalar_one_or_none()
-                if not lesson: continue
-                try:
-                    content = await asyncio.to_thread(generate_lesson_content, course_title, mod_data.get("title", ""), les_data.get("title", ""))
-                    md = content.get("content_markdown", ""); lesson.content = md; lesson.content_markdown = md
-                    await db.execute(delete(E).where(E.lesson_id == lesson.id))
-                    for ei, ex in enumerate(content.get("exercises", [])):
-                        try: et = ET(ex.get("exercise_type", "code_completion"))
-                        except ValueError: et = ET.CODE_COMPLETION
-                        try: ed = ED(ex.get("difficulty", "easy"))
-                        except ValueError: ed = ED.EASY
-                        db.add(E(id=uuid4(), lesson_id=lesson.id, title=ex.get("title", f"Ex {ei+1}"), description=ex.get("description", ""), instructions=ex.get("instructions", ""), exercise_type=et, difficulty=ed, starter_code=ex.get("starter_code", ""), solution_code=ex.get("solution_code", ""), test_code=ex.get("test_code", ""), hints=ex.get("hints", []), skill_tags=les_data.get("skill_tags", []), points=ex.get("points", 10), display_order=ei+1))
-                    await db.commit(); generated += 1
-                except Exception as e:
-                    failed += 1; lesson.content_markdown = f"# {les_data.get('title')}\n\nGeneration failed. Try regenerating."; lesson.content = lesson.content_markdown
-                    await db.commit(); logger.warning("bg.gen.failed", title=les_data.get("title"), error=str(e)[:100])
-        logger.info("bg.gen.done", generated=generated, failed=failed)
+@router.get("/chaos/experiments")
+async def list_chaos_experiments(admin_user: UserModel = Depends(require_admin)):
+    """List active chaos experiments."""
+    from app.chaos import chaos_engine
+    return {
+        "active_experiments": chaos_engine.list_active_experiments(),
+        "chaos_enabled": settings.CHAOS_ENABLED,
+    }
+
+
+@router.post("/chaos/experiments/{experiment_type}")
+async def create_chaos_experiment(
+    experiment_type: str,
+    admin_user: UserModel = Depends(require_admin),
+    duration_ms: int = 1000,
+    error_rate: float = 0.1,
+    status_code: int = 500,
+):
+    """Create a chaos experiment."""
+    from app.chaos import chaos_engine, ChaosExperiment
+    
+    if not settings.CHAOS_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chaos engineering is disabled"
+        )
+    
+    try:
+        experiment_enum = ChaosExperiment(experiment_type)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid experiment type. Valid types: {[e.value for e in ChaosExperiment]}"
+        )
+    
+    if experiment_enum == ChaosExperiment.LATENCY_INJECTION:
+        experiment_id = chaos_engine.inject_latency(duration_ms)
+    elif experiment_enum == ChaosExperiment.ERROR_INJECTION:
+        experiment_id = chaos_engine.inject_error(error_rate, status_code)
+    else:
+        # For other experiment types, just log for now
+        experiment_id = f"{experiment_type}_manual"
+        chaos_engine.active_experiments.add(experiment_id)
+        logger.info(
+            "chaos.experiment.manual",
+            experiment_type=experiment_type,
+            experiment_id=experiment_id,
+        )
+    
+    return {
+        "experiment_id": experiment_id,
+        "experiment_type": experiment_type,
+        "status": "started",
+    }
+
+
+@router.delete("/chaos/experiments/{experiment_id}")
+async def stop_chaos_experiment(
+    experiment_id: str,
+    admin_user: UserModel = Depends(require_admin),
+):
+    """Stop a chaos experiment."""
+    from app.chaos import chaos_engine
+    
+    if not settings.CHAOS_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chaos engineering is disabled"
+        )
+    
+    stopped = chaos_engine.stop_experiment(experiment_id)
+    if not stopped:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Experiment {experiment_id} not found or not active"
+        )
+    
+    return {"status": "stopped", "experiment_id": experiment_id}
+
+
+@router.post("/chaos/experiments/clear-all")
+async def clear_all_chaos_experiments(admin_user: UserModel = Depends(require_admin)):
+    """Stop all active chaos experiments."""
+    from app.chaos import chaos_engine
+    
+    if not settings.CHAOS_ENABLED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Chaos engineering is disabled"
+        )
+    
+    chaos_engine.clear_all_experiments()
+    return {"status": "all_experiments_stopped"}

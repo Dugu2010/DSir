@@ -78,7 +78,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     setUser(null);
-    router.push("/");
+    // No explicit navigation here: AppShell's client-side guard observes the
+    // now-unauthenticated session and sends protected pages to
+    // `/login?redirect=...`. This avoids a race between `router.push` and the
+    // guard's `router.replace`.
   };
 
   return (

@@ -15,15 +15,17 @@ const paddings = {
   lg: "p-8",
 };
 
+// Editorial card: rounded-2xl, subtle border, no heavy shadows.
 export function Card({ children, className, padding = "md", hover, onClick }: CardProps) {
   return (
     <div
       onClick={onClick}
       className={cn(
         "rounded-2xl border border-border bg-surface",
-        "shadow-sm",
+        "shadow-none",
         paddings[padding],
-        hover && "hover:shadow-md hover:border-ink-tertiary transition-all duration-200 cursor-pointer",
+        hover &&
+          "hover:border-coral-400/60 dark:hover:border-coral-500/40 hover:bg-surface-secondary transition-all duration-200 cursor-pointer",
         className
       )}
     >
@@ -37,7 +39,7 @@ export function CardHeader({ children, className }: { children: React.ReactNode;
 }
 
 export function CardTitle({ children, className }: { children: React.ReactNode; className?: string }) {
-  return <h3 className={cn("text-lg font-semibold text-ink", className)}>{children}</h3>;
+  return <h3 className={cn("font-display text-lg font-semibold text-ink", className)}>{children}</h3>;
 }
 
 export function CardDescription({ children, className }: { children: React.ReactNode; className?: string }) {

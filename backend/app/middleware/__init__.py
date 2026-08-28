@@ -9,6 +9,11 @@ from app.config import get_settings
 from collections import defaultdict
 from datetime import datetime, timedelta
 
+# Import custom middlewares
+from app.middleware.security import SecurityHeadersMiddleware
+from app.middleware.compression import GZipMiddleware
+from app.middleware.request_size import RequestSizeLimitMiddleware
+
 settings = get_settings()
 logger = structlog.get_logger()
 
@@ -70,6 +75,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 
 def setup_middleware(app: FastAPI):
+    # Request size limiting - reject large requests early
+    app.add_middleware(RequestSizeLimitMiddleware, max_size=10 * 1024 * 1024)  # 10 MB
+    
+    # CORS - handles preflight requests
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.CORS_ORIGINS,
@@ -78,5 +87,15 @@ def setup_middleware(app: FastAPI):
         allow_headers=["*"],
         max_age=86400,
     )
-    app.add_middleware(RequestLoggingMiddleware)
+    
+    # Rate limiting - block excessive requests early
     app.add_middleware(RateLimitMiddleware)
+    
+    # Security headers - add security headers to all responses
+    app.add_middleware(SecurityHeadersMiddleware)
+    
+    # Response compression - compress responses
+    app.add_middleware(GZipMiddleware, minimum_size=500)
+    
+    # Request logging - log requests and responses
+    app.add_middleware(RequestLoggingMiddleware)

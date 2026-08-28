@@ -58,3 +58,24 @@ export const exerciseTypeLabel: Record<string, string> = {
   refactoring: "Refactoring",
   optimization: "Optimization",
 }
+
+export type SandboxLanguage = "python" | "javascript" | "html";
+
+// Find the first runnable code block in lesson markdown so the "Try it
+// Yourself" sandbox can prefill with lesson-relevant starter code. Skips
+// non-runnable fences (bash, sql, plain text, etc.).
+export function extractStarterCode(content: string): { code: string; language: SandboxLanguage } | null {
+  const fenceRegex = /```[ \t]*([^\n]*)\n([\s\S]*?)```/g;
+  let m: RegExpExecArray | null;
+  while ((m = fenceRegex.exec(content)) !== null) {
+    let lang = (m[1] || "").trim().toLowerCase();
+    if (lang === "js" || lang === "node" || lang === "javascript" || lang === "jsx") lang = "javascript";
+    else if (lang === "py" || lang === "python" || lang === "python3") lang = "python";
+    else if (lang === "html" || lang === "htm" || lang === "html5") lang = "html";
+    else continue; // not runnable in-browser — keep looking
+    const code = m[2].trim();
+    if (!code) continue;
+    return { code, language: lang as SandboxLanguage };
+  }
+  return null;
+}

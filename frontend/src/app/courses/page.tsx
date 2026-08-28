@@ -2,7 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useId } from "react";
 import { courses as coursesApi, admin, auth } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
@@ -14,23 +14,22 @@ import type { CourseListItem } from "@/lib/types";
 import {
   Search, Star, BookOpen, Clock, Users,
   AlertCircle, RefreshCw, X, Trash2,
-  GraduationCap, Layers, Filter, SlidersHorizontal,
+  GraduationCap, Layers, Filter, SlidersHorizontal, ArrowRight,
 } from "lucide-react";
 
-const GRADIENTS = [
-  "from-violet-600 to-indigo-700",
-  "from-emerald-600 to-teal-700",
-  "from-amber-500 to-orange-600",
-  "from-rose-500 to-pink-600",
-  "from-cyan-500 to-blue-600",
-  "from-fuchsia-500 to-purple-600",
-  "from-lime-500 to-green-600",
-  "from-sky-500 to-indigo-600",
+// Calm editorial palette for course-card headers (no gradients).
+const CARD_TINTS = [
+  "bg-coral-50 text-coral-600 dark:bg-coral-500/10 dark:text-coral-400",
+  "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+  "bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400",
+  "bg-sky-50 text-sky-700 dark:bg-sky-500/10 dark:text-sky-400",
+  "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-400",
+  "bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400",
 ];
 
 const ICONS = ["🐍", "⚛️", "🚀", "💡", "🔧", "📊", "🎨", "🤖", "📱", "🔐"];
 
-function getGradient(i: number) { return GRADIENTS[i % GRADIENTS.length]; }
+function getTint(i: number) { return CARD_TINTS[i % CARD_TINTS.length]; }
 function getIcon(i: number) { return ICONS[i % ICONS.length]; }
 
 export default function CoursesPage() {
@@ -62,8 +61,8 @@ export default function CoursesPage() {
     }),
   });
 
-  const items: CourseListItem[] = (data as any)?.items ?? [];
-  const total = (data as any)?.total ?? 0;
+  const items: CourseListItem[] = useMemo(() => (data as any)?.items ?? [], [data]);
+  const total = useMemo(() => (data as any)?.total ?? 0, [data]);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
@@ -93,19 +92,17 @@ export default function CoursesPage() {
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-12">
       {/* Hero Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-600 via-brand-700 to-indigo-800 p-8 md:p-12">
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(255,255,255,0.08)_0%,transparent_60%)]" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/4 blur-3xl" />
-        <div className="relative z-10">
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-3">Explore Courses</h1>
-          <p className="text-white/70 text-lg max-w-xl">
-            Master new skills with expert-crafted courses. From Python to AI, find your next challenge.
-          </p>
-          <div className="flex flex-wrap gap-6 mt-6">
-            <Stat icon={<BookOpen className="h-5 w-5" />} value={formatNumber(total)} label="Courses" />
-            <Stat icon={<GraduationCap className="h-5 w-5" />} value={items.length > 0 ? formatNumber(items.reduce((s, c) => s + c.enrollment_count, 0)) : "—"} label="Enrollments" />
-            <Stat icon={<Layers className="h-5 w-5" />} value={String(allTags.length)} label="Topics" />
-          </div>
+      <div className="relative overflow-hidden rounded-3xl bg-ink dark:bg-night-500 border border-border dark:border-white/5 p-8 md:p-12 text-paper-50 dark:text-ink">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-coral-500/60 to-transparent" aria-hidden="true" />
+        <p className="eyebrow mb-4 !text-coral-400">No. 02 — The catalog</p>
+        <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-tight mb-3">Explore Courses</h1>
+        <p className="text-paper-50/70 dark:text-ink-secondary text-lg max-w-xl">
+          Master new skills with expert-crafted courses. From Python to AI, find your next challenge.
+        </p>
+        <div className="flex flex-wrap gap-8 mt-8">
+          <Stat icon={<BookOpen className="h-5 w-5" />} value={formatNumber(total)} label="Courses" />
+          <Stat icon={<GraduationCap className="h-5 w-5" />} value={items.length > 0 ? formatNumber(items.reduce((s, c) => s + c.enrollment_count, 0)) : "—"} label="Enrollments" />
+          <Stat icon={<Layers className="h-5 w-5" />} value={String(allTags.length)} label="Topics" />
         </div>
       </div>
 
@@ -122,14 +119,15 @@ export default function CoursesPage() {
             {search && (
               <button
                 onClick={() => { setSearch(""); setDebouncedSearch(""); }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9ca3af] hover:text-[#6b7280] dark:hover:text-white transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-tertiary hover:text-ink-secondary dark:hover:text-ink transition-colors"
+                aria-label="Clear search"
               >
                 <X className="h-4 w-4" />
               </button>
             )}
           </div>
-          <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} leftIcon={<SlidersHorizontal className="h-4 w-4" />}>
-            Filters{hasActiveFilters && <span className="ml-1.5 h-2 w-2 rounded-full bg-brand-500" />}
+          <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)} aria-expanded={showFilters} aria-controls="course-filters" leftIcon={<SlidersHorizontal className="h-4 w-4" />}>
+            Filters{hasActiveFilters && <span className="ml-1.5 h-2 w-2 rounded-full bg-coral-500" />}
           </Button>
         </div>
 
@@ -146,7 +144,7 @@ export default function CoursesPage() {
         )}
 
         {showFilters && (
-          <div className="flex flex-wrap items-center gap-3 p-4 rounded-2xl bg-[#f8f9fc] dark:bg-white/[0.03] border border-[#e8ecf1] dark:border-white/5">
+          <div id="course-filters" className="flex flex-wrap items-center gap-3 p-4 rounded-2xl bg-surface-tertiary dark:bg-white/[0.03] border border-border dark:border-white/5">
             <FilterSelect label="Level" value={difficulty} onChange={setDifficulty} options={[
               { value: "", label: "All Levels" },
               { value: "beginner", label: "Beginner" },
@@ -165,8 +163,8 @@ export default function CoursesPage() {
         )}
 
         {hasActiveFilters && !showFilters && (
-          <p className="text-sm text-[#6b7280] dark:text-[#8b8fa3]">
-            {filteredItems.length} of {items.length} courses · <button onClick={clearFilters} className="text-brand-600 dark:text-brand-400 hover:underline">Clear filters</button>
+          <p className="text-sm text-ink-secondary dark:text-ink-tertiary">
+            {filteredItems.length} of {items.length} courses · <button onClick={clearFilters} className="text-coral-600 dark:text-coral-400 hover:underline">Clear filters</button>
           </p>
         )}
       </div>
@@ -200,7 +198,7 @@ export default function CoursesPage() {
               <CourseCard
                 key={course.id}
                 course={course}
-                gradient={getGradient(i)}
+                tint={getTint(i)}
                 icon={getIcon(i)}
                 isAdmin={isAdmin}
                 onDelete={(id, title) => setDeleteTarget({ id, title })}
@@ -209,11 +207,11 @@ export default function CoursesPage() {
           </div>
         ) : (
           <div className="text-center py-20">
-            <div className="h-20 w-20 rounded-2xl bg-[#f0f2f7] dark:bg-white/5 flex items-center justify-center mx-auto mb-5">
-              <Search className="h-8 w-8 text-[#9ca3af] dark:text-[#6b7280]" />
+            <div className="h-20 w-20 rounded-2xl bg-surface-tertiary dark:bg-white/5 flex items-center justify-center mx-auto mb-5">
+              <Search className="h-8 w-8 text-ink-tertiary" />
             </div>
-            <h3 className="text-lg font-semibold text-[#1a1d2e] dark:text-white mb-2">No courses found</h3>
-            <p className="text-sm text-[#6b7280] dark:text-[#8b8fa3] max-w-sm mx-auto mb-6">
+            <h3 className="font-display text-lg font-semibold text-ink dark:text-ink mb-2">No courses found</h3>
+            <p className="text-sm text-ink-secondary dark:text-ink-tertiary max-w-sm mx-auto mb-6">
               Try adjusting your search or filters.
             </p>
             <Button variant="outline" onClick={clearFilters} leftIcon={<X className="h-4 w-4" />}>Clear filters</Button>
@@ -223,19 +221,28 @@ export default function CoursesPage() {
 
       {/* Delete modal */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setDeleteTarget(null)}>
-          <div className="bg-white dark:bg-[#14141a] rounded-2xl p-6 max-w-md w-full shadow-2xl border border-[#e8ecf1] dark:border-white/10" onClick={e => e.stopPropagation()}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+          onClick={() => setDeleteTarget(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-course-title"
+            className="bg-surface dark:bg-night-500 rounded-2xl p-6 max-w-md w-full shadow-xl border border-border dark:border-white/10"
+            onClick={e => e.stopPropagation()}
+          >
             <div className="flex items-center gap-3 mb-4">
               <div className="h-12 w-12 rounded-xl bg-red-100 dark:bg-red-500/10 flex items-center justify-center">
                 <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-[#1a1d2e] dark:text-white">Delete Course</h3>
-                <p className="text-sm text-[#6b7280] dark:text-[#8b8fa3]">This will permanently delete the course and all its content.</p>
+                <h3 id="delete-course-title" className="font-display text-lg font-semibold text-ink dark:text-ink">Delete Course</h3>
+                <p className="text-sm text-ink-secondary">This will permanently delete the course and all its content.</p>
               </div>
             </div>
-            <p className="text-sm text-[#6b7280] dark:text-[#8b8fa3] mb-6">
-              Are you sure you want to delete <strong className="text-[#1a1d2e] dark:text-white">"{deleteTarget.title}"</strong>? This cannot be undone.
+            <p className="text-sm text-ink-secondary mb-6">
+              Are you sure you want to delete <strong className="text-ink dark:text-ink">&ldquo;{deleteTarget.title}&rdquo;</strong>? This cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
               <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteMutation.isPending}>Cancel</Button>
@@ -250,11 +257,11 @@ export default function CoursesPage() {
 
 function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
   return (
-    <div className="flex items-center gap-2 text-white/80">
-      <div className="h-10 w-10 rounded-xl bg-white/10 flex items-center justify-center">{icon}</div>
+    <div className="flex items-center gap-3">
+      <div className="h-10 w-10 rounded-xl bg-coral-500/10 flex items-center justify-center text-coral-400">{icon}</div>
       <div>
-        <div className="text-xl font-bold text-white">{value}</div>
-        <div className="text-xs text-white/50">{label}</div>
+        <div className="font-display text-xl font-bold text-paper-50 dark:text-ink">{value}</div>
+        <div className="text-xs font-mono uppercase tracking-eyebrow text-paper-50/50 dark:text-ink-tertiary">{label}</div>
       </div>
     </div>
   );
@@ -264,8 +271,9 @@ function TagPill({ active, onClick, children }: { active: boolean; onClick: () =
   return (
     <button
       onClick={onClick}
-      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-        active ? "bg-brand-600 text-white shadow-sm" : "bg-[#f0f2f7] dark:bg-white/5 text-[#6b7280] dark:text-[#8b8fa3] hover:bg-brand-100 dark:hover:bg-brand-500/10"
+      aria-pressed={active}
+      className={`px-3 py-1.5 rounded-full text-xs font-medium font-mono transition-all ${
+        active ? "bg-coral-500 text-night-600 shadow-none" : "bg-surface-tertiary dark:bg-white/5 text-ink-secondary dark:text-ink-tertiary hover:bg-coral-50 dark:hover:bg-coral-500/10 hover:text-coral-700 dark:hover:text-coral-400"
       }`}
     >
       {children}
@@ -279,14 +287,16 @@ function FilterSelect({ label, value, onChange, options }: {
   onChange: (v: string) => void;
   options: { value: string; label: string }[];
 }) {
+  const id = useId();
   return (
     <div className="flex items-center gap-2">
-      <Filter className="h-4 w-4 text-[#9ca3af]" />
-      <span className="text-sm text-[#6b7280] dark:text-[#8b8fa3]">{label}:</span>
+      <Filter className="h-4 w-4 text-ink-tertiary" aria-hidden="true" />
+      <label htmlFor={id} className="text-sm text-ink-secondary dark:text-ink-tertiary">{label}:</label>
       <select
+        id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-9 px-3 rounded-lg border border-[#e8ecf1] dark:border-white/10 bg-white dark:bg-[#0d0d13] text-sm text-[#1a1d2e] dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+        className="h-9 px-3 rounded-lg border border-border dark:border-white/10 bg-surface dark:bg-night-500 text-sm text-ink dark:text-ink focus:outline-none focus:ring-2 focus:ring-coral-500"
       >
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
@@ -294,9 +304,9 @@ function FilterSelect({ label, value, onChange, options }: {
   );
 }
 
-function CourseCard({ course, gradient, icon, isAdmin, onDelete }: {
+function CourseCard({ course, tint, icon, isAdmin, onDelete }: {
   course: CourseListItem;
-  gradient: string;
+  tint: string;
   icon: string;
   isAdmin: boolean;
   onDelete: (id: string, title: string) => void;
@@ -304,14 +314,15 @@ function CourseCard({ course, gradient, icon, isAdmin, onDelete }: {
   return (
     <div className="group relative">
       <Link href={`/courses/${course.slug}`}>
-        <Card hover padding="none" className="overflow-hidden h-full transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
-          <div className={`h-36 bg-gradient-to-br ${gradient} flex items-center justify-center relative overflow-hidden`}>
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(255,255,255,0.1)_0%,transparent_50%)]" />
-            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: "radial-gradient(circle, rgba(255,255,255,0.3) 1px, transparent 1px)", backgroundSize: "20px 20px" }} />
-            <span className="text-4xl relative z-10">{icon}</span>
+        <Card hover padding="none" className="overflow-hidden h-full transition-all duration-300 hover:-translate-y-0.5">
+          <div className={`h-32 ${tint} flex items-center justify-center relative overflow-hidden border-b border-border dark:border-white/5`}>
+            <span className="text-4xl relative z-10" aria-hidden="true">{icon}</span>
             {course.is_featured && (
-              <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-amber-400/90 text-amber-900 text-[10px] font-bold uppercase tracking-wider">Featured</span>
+              <span className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full bg-coral-500 text-night-600 text-[10px] font-mono font-bold uppercase tracking-eyebrow">Featured</span>
             )}
+            <span className="absolute bottom-2 left-3 font-mono text-[10px] uppercase tracking-eyebrow opacity-60" aria-hidden="true">
+              No. {String(course.id.slice(-2).replace(/\D/g, "") || "—").padStart(2, "0")}
+            </span>
           </div>
           <div className="p-5">
             <div className="flex items-start justify-between mb-2">
@@ -319,14 +330,14 @@ function CourseCard({ course, gradient, icon, isAdmin, onDelete }: {
               {course.rating_count > 0 && (
                 <div className="flex items-center gap-1">
                   <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
-                  <span className="text-xs font-semibold text-[#1a1d2e] dark:text-white">{course.rating_average}</span>
-                  <span className="text-xs text-[#9ca3af] dark:text-[#6b7280]">({formatNumber(course.rating_count)})</span>
+                  <span className="text-xs font-semibold text-ink dark:text-ink">{course.rating_average}</span>
+                  <span className="text-xs text-ink-tertiary">({formatNumber(course.rating_count)})</span>
                 </div>
               )}
             </div>
-            <h3 className="font-semibold text-[#1a1d2e] dark:text-white mb-1.5 line-clamp-2 group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{course.title}</h3>
-            <p className="text-sm text-[#6b7280] dark:text-[#8b8fa3] line-clamp-2 mb-4">{course.description}</p>
-            <div className="flex items-center gap-3 text-xs text-[#9ca3af] dark:text-[#6b7280] mb-3">
+            <h3 className="font-display font-semibold text-ink dark:text-ink mb-1.5 line-clamp-2 group-hover:text-coral-700 dark:group-hover:text-coral-400 transition-colors">{course.title}</h3>
+            <p className="text-sm text-ink-secondary line-clamp-2 mb-4">{course.description}</p>
+            <div className="flex items-center gap-3 text-xs text-ink-tertiary mb-3">
               <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {course.lesson_count} lessons</span>
               {course.estimated_duration_minutes && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(course.estimated_duration_minutes)}</span>}
               <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {formatNumber(course.enrollment_count)}</span>
@@ -343,7 +354,8 @@ function CourseCard({ course, gradient, icon, isAdmin, onDelete }: {
       {isAdmin && (
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onDelete(course.id, course.title); }}
-          className="absolute top-3 left-3 z-20 p-1.5 rounded-lg bg-red-500/90 text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+          className="absolute top-3 left-3 z-20 p-1.5 rounded-lg bg-red-500/90 text-white opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-opacity hover:bg-red-600"
+          aria-label={`Delete course "${course.title}"`}
           title="Delete course"
         >
           <Trash2 className="h-3.5 w-3.5" />

@@ -1,1 +1,15 @@
-.nexus/\nnode_modules/\n.env\n__pycache__/\n*.pyc\n.venv/\n.next/\n.DS_Store\n.env.local
+.nexus/
+node_modules/
+.env
+.env.local
+.env.bak
+.env.bak.*
+__pycache__/
+*.pyc
+.venv/
+.next/
+.DS_Store
+.opencode/
+*.tsbuildinfo
+session-ses_*.md
+frontend/public/pyodide/

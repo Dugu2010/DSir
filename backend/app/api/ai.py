@@ -13,6 +13,7 @@ from app.models import User
 from app.config import get_settings
 from uuid import UUID
 from datetime import datetime, timezone
+from typing import Optional
 import httpx
 import structlog
 
@@ -66,9 +67,7 @@ async def create_conversation(
     )
     db.add(conv)
     await db.flush()
-    resp = AIConversationResponse.model_validate(conv)
-    resp.message_count = 0
-    return resp
+    return conv
 
 
 @router.get("/conversations/{conv_id}/messages", response_model=list[AIMessageResponse])
@@ -162,26 +161,54 @@ async def send_message(
 # ═══════════════════════════════════════════════════════════════
 
 async def _call_ai_provider(messages: list[dict]) -> str:
-    """Call the configured AI provider. Supports Gemini, OpenAI, and Anthropic."""
+    """Call the configured AI provider with automatic fallback to other
+    configured providers. Supports Gemini, OpenAI-compatible (incl. NVIDIA),
+    and Anthropic. Returns a graceful fallback message only when no provider
+    is configured or every configured provider fails."""
     provider = settings.AI_DEFAULT_PROVIDER.lower()
 
-    # ── Gemini (Google AI) — free tier, best default ──
-    if provider == "gemini" and settings.GEMINI_API_KEY:
-        return await _call_gemini_chat(messages)
+    # Ordered candidates: the configured default provider first, then any
+    # other provider that has an API key configured.
+    candidates: list[tuple[str, bool, object]] = []
 
-    # ── OpenAI ──
-    elif provider == "openai" and settings.OPENAI_API_KEY:
-        return await _call_openai_chat(messages)
+    if provider == "gemini":
+        candidates.append(("gemini", bool(settings.GEMINI_API_KEY), lambda: _call_gemini_chat(messages)))
+    elif provider == "openai":
+        candidates.append(("openai", bool(settings.OPENAI_API_KEY), lambda: _call_openai_chat(messages)))
+    elif provider == "anthropic":
+        candidates.append(("anthropic", bool(settings.ANTHROPIC_API_KEY), lambda: _call_anthropic_chat(messages)))
+    elif provider == "nvidia":
+        # NVIDIA exposes an OpenAI-compatible API via AI_OPENAI_BASE_URL
+        candidates.append(
+            ("nvidia", bool(settings.AI_OPENAI_BASE_URL or settings.OPENAI_API_KEY),
+             lambda: _call_openai_chat(messages, base_url=settings.AI_OPENAI_BASE_URL))
+        )
 
-    # ── Anthropic ──
-    elif provider == "anthropic" and settings.ANTHROPIC_API_KEY:
-        return await _call_anthropic_chat(messages)
+    if provider != "gemini" and settings.GEMINI_API_KEY:
+        candidates.append(("gemini", True, lambda: _call_gemini_chat(messages)))
+    if provider != "openai" and settings.OPENAI_API_KEY:
+        candidates.append(("openai", True, lambda: _call_openai_chat(messages)))
+    if provider != "anthropic" and settings.ANTHROPIC_API_KEY:
+        candidates.append(("anthropic", True, lambda: _call_anthropic_chat(messages)))
 
-    # ── No provider configured ──
-    logger.warning("ai_provider.unavailable", provider=provider,
-                   has_gemini=bool(settings.GEMINI_API_KEY),
-                   has_openai=bool(settings.OPENAI_API_KEY),
-                   has_anthropic=bool(settings.ANTHROPIC_API_KEY))
+    for name, available, call in candidates:
+        if not available:
+            continue
+        try:
+            return await call()  # type: ignore[operator]
+        except Exception as e:
+            logger.warning("ai_provider.failed", provider=name, error=str(e)[:200])
+            continue
+
+    # ── No provider available or all providers failed ──
+    logger.warning(
+        "ai_provider.unavailable",
+        provider=provider,
+        has_gemini=bool(settings.GEMINI_API_KEY),
+        has_openai=bool(settings.OPENAI_API_KEY),
+        has_anthropic=bool(settings.ANTHROPIC_API_KEY),
+        has_base_url=bool(settings.AI_OPENAI_BASE_URL),
+    )
     return _get_fallback_response(messages[-1]["content"])
 
 
@@ -223,10 +250,10 @@ async def _call_gemini_chat(messages: list[dict]) -> str:
             "maxOutputTokens": 2000,
         },
         "safetySettings": [
-            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
-            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_ONLY_HIGH"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_ONLY_HIGH"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_ONLY_HIGH"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_ONLY_HIGH"},
         ],
     }
 
@@ -243,18 +270,13 @@ async def _call_gemini_chat(messages: list[dict]) -> str:
                 json=body,
             )
             if response.status_code != 200:
-                logger.warning("gemini_chat.http_error",
-                               status=response.status_code,
-                               body=response.text[:300])
-                return _get_fallback_response(messages[-1]["content"])
+                raise RuntimeError(f"Gemini HTTP {response.status_code}: {response.text[:300]}")
 
             data = response.json()
             candidates = data.get("candidates", [])
             if not candidates:
                 fb = data.get("promptFeedback", {})
-                reason = fb.get("blockReason", "unknown")
-                logger.warning("gemini_chat.blocked", reason=reason)
-                return _get_fallback_response(messages[-1]["content"])
+                raise RuntimeError(f"Gemini blocked: {fb.get('blockReason', 'unknown')}")
 
             cand = candidates[0]
             finish = cand.get("finishReason", "STOP")
@@ -263,27 +285,31 @@ async def _call_gemini_chat(messages: list[dict]) -> str:
             )
 
             if not text:
-                logger.warning("gemini_chat.empty_text", finish=finish)
-                return _get_fallback_response(messages[-1]["content"])
+                raise RuntimeError(f"Gemini empty response (finishReason={finish})")
 
             logger.info("gemini_chat.ok", response_len=len(text), finish=finish)
             return text
 
     except Exception as e:
         logger.error("gemini_chat.exception", error=str(e)[:200])
-        return _get_fallback_response(messages[-1]["content"])
+        raise
 
 
 # ═══════════════════════════════════════════════════════════════
 # OPENAI CHAT
 # ═══════════════════════════════════════════════════════════════
 
-async def _call_openai_chat(messages: list[dict]) -> str:
-    """Call OpenAI Chat Completions API."""
+async def _call_openai_chat(messages: list[dict], base_url: Optional[str] = None) -> str:
+    """Call an OpenAI-compatible Chat Completions API.
+
+    Uses AI_OPENAI_BASE_URL when set (Groq, DeepSeek, NVIDIA, OpenRouter, ...),
+    otherwise defaults to the public OpenAI endpoint.
+    """
+    url_base = (base_url or settings.AI_OPENAI_BASE_URL or "https://api.openai.com/v1").rstrip("/")
     try:
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(
-                "https://api.openai.com/v1/chat/completions",
+                f"{url_base}/chat/completions",
                 headers={
                     "Authorization": f"Bearer {settings.OPENAI_API_KEY}",
                     "Content-Type": "application/json",
@@ -298,13 +324,10 @@ async def _call_openai_chat(messages: list[dict]) -> str:
             if response.status_code == 200:
                 data = response.json()
                 return data["choices"][0]["message"]["content"]
-            logger.warning("openai_chat.http_error",
-                           status=response.status_code,
-                           body=response.text[:300])
-            return _get_fallback_response(messages[-1]["content"])
+            raise RuntimeError(f"OpenAI HTTP {response.status_code}: {response.text[:300]}")
     except Exception as e:
         logger.error("openai_chat.exception", error=str(e)[:200])
-        return _get_fallback_response(messages[-1]["content"])
+        raise
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -332,13 +355,10 @@ async def _call_anthropic_chat(messages: list[dict]) -> str:
             if response.status_code == 200:
                 data = response.json()
                 return data["content"][0]["text"]
-            logger.warning("anthropic_chat.http_error",
-                           status=response.status_code,
-                           body=response.text[:300])
-            return _get_fallback_response(messages[-1]["content"])
+            raise RuntimeError(f"Anthropic HTTP {response.status_code}: {response.text[:300]}")
     except Exception as e:
         logger.error("anthropic_chat.exception", error=str(e)[:200])
-        return _get_fallback_response(messages[-1]["content"])
+        raise
 
 
 # ═══════════════════════════════════════════════════════════════

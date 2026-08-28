@@ -5,14 +5,17 @@ from app.database import get_db
 from app.models import (
     Course, Module, Lesson, Category, TechnologyStack,
     CourseTechnology, ContentStatus, DifficultyLevel,
-    Enrollment, Exercise,
+    Enrollment, Exercise, CourseReview,
 )
 from app.schemas import (
     CourseCreate, CourseUpdate, CourseResponse, CourseListItem,
     ModuleCreate, ModuleUpdate, ModuleResponse,
     PaginatedResponse, PaginationParams,
+    CourseReviewCreate, CourseReviewResponse,
 )
 from app.utils.deps import get_current_active_user, require_teacher, get_optional_user
+from app.utils.redis import get_cache, set_cache, delete_cache, clear_cache_pattern
+import json
 from app.models import User
 from uuid import UUID
 from datetime import datetime, timezone
@@ -34,6 +37,14 @@ async def list_courses(
     current_user: User = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Generate cache key based on query parameters (excluding current_user and db)
+    cache_key = f"courses:list:{page}:{size}:{difficulty or ''}:{category or ''}:{technology or ''}:{search or ''}:{sort or ''}"
+    
+    # Try to get cached response
+    cached_response = await get_cache(cache_key)
+    if cached_response is not None:
+        return cached_response
+    
     # Allow draft courses to be listed (removed ContentStatus.PUBLISHED check)
     query = select(Course).where(Course.deleted_at.is_(None))
 
@@ -79,32 +90,58 @@ async def list_courses(
     result = await db.execute(query.offset((page - 1) * size).limit(size))
     courses = result.scalars().all()
 
-    return PaginatedResponse(
+    response = PaginatedResponse(
         items=[CourseListItem.model_validate(c) for c in courses],
         total=total,
         page=page,
         size=size,
         pages=(total + size - 1) // size if total > 0 else 0,
     )
+    
+    # Cache the response for 1 minute
+    await set_cache(cache_key, response, expire=60)
+    
+    return response
 
 
 @router.get("/featured", response_model=list[CourseResponse])
 async def list_featured_courses(db: AsyncSession = Depends(get_db)):
+    # Try to get cached featured courses
+    cache_key = "courses:featured"
+    cached_response = await get_cache(cache_key)
+    if cached_response is not None:
+        return cached_response
+    
     result = await db.execute(
         select(Course)
         .where(Course.is_featured == True, Course.deleted_at.is_(None))
     )
-    return result.scalars().all()
+    response = result.scalars().all()
+    
+    # Cache featured courses for 5 minutes
+    await set_cache(cache_key, response, expire=300)
+    
+    return response
 
 
 @router.get("/{course_slug}", response_model=CourseResponse)
 async def get_course_detail(course_slug: str, db: AsyncSession = Depends(get_db)):
+    # Try to get cached course detail
+    cache_key = f"course:detail:{course_slug}"
+    cached_course = await get_cache(cache_key)
+    if cached_course is not None:
+        return cached_course
+    
     result = await db.execute(
         select(Course).where(Course.slug == course_slug, Course.deleted_at.is_(None))
     )
     course = result.scalar_one_or_none()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
+    
+    # Cache course detail for 5 minutes
+    await set_cache(cache_key, course, expire=300)
+    
     return course
 
 
@@ -136,6 +173,12 @@ async def create_course(
     db.add(course)
     await db.flush()
     await db.commit()
+    
+    # Invalidate relevant caches
+    await clear_cache_pattern("courses:list:*")  # Invalidate all course list caches
+    await delete_cache("courses:featured")        # Invalidate featured courses
+    await delete_cache(f"course:detail:{course.slug}")  # Invalidate this course detail
+    
     return course
 
 
@@ -168,6 +211,13 @@ async def update_course(
     course.updated_at = datetime.now(timezone.utc)
     await db.flush()
     await db.commit()
+    
+    # Invalidate relevant caches
+    await clear_cache_pattern("courses:list:*")  # Invalidate all course list caches
+    await delete_cache("courses:featured")        # Invalidate featured courses
+    await delete_cache(f"course:detail:{course.slug}")  # Invalidate this course detail
+    await clear_cache_pattern(f"course:modules:{course.id}:*")  # Invalidate modules for this course
+    
     return course
 
 
@@ -187,7 +237,38 @@ async def list_course_modules(course_slug: str, db: AsyncSession = Depends(get_d
         .where(Module.course_id == course.id, Module.deleted_at.is_(None))
         .order_by(Module.display_order.asc())
     )
-    return modules_result.scalars().all()
+    modules = modules_result.scalars().all()
+
+    # Fetch all lessons for all modules in one query
+    from app.schemas import LessonListItem
+    import json as _json
+    module_ids = [m.id for m in modules]
+    lessons_by_module: dict = {}
+    if module_ids:
+        lessons_result = await db.execute(
+            select(Lesson)
+            .where(Lesson.module_id.in_(module_ids), Lesson.deleted_at.is_(None))
+            .order_by(Lesson.module_id.asc(), Lesson.display_order.asc())
+        )
+        for lesson in lessons_result.scalars().all():
+            mid = str(lesson.module_id)
+            if mid not in lessons_by_module:
+                lessons_by_module[mid] = []
+            lessons_by_module[mid].append(LessonListItem.model_validate(lesson).model_dump())
+
+    # Serialize modules via JSON to avoid greenlet issues
+    # SQLAlchemy objects don't survive outside the async query context
+    from sqlalchemy.orm import class_mapper
+    result_list = []
+    mapper = class_mapper(Module)
+    cols = [c.key for c in mapper.columns]
+    for module in modules:
+        # Access all column values immediately while still in context
+        md = {col: getattr(module, col) for col in cols}
+        md["lessons"] = lessons_by_module.get(str(md["id"]), [])
+        result_list.append(md)
+
+    return result_list
 
 
 @router.post("/{course_slug}/modules", response_model=ModuleResponse, status_code=status.HTTP_201_CREATED)
@@ -218,3 +299,104 @@ async def create_module(
     await db.flush()
     await db.commit()
     return module
+
+
+# ── Course Reviews ──────────────────────────────────────────────
+
+@router.get("/{course_slug}/reviews", response_model=PaginatedResponse)
+async def list_course_reviews(
+    course_slug: str,
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Course).where(Course.slug == course_slug, Course.deleted_at.is_(None))
+    )
+    course = result.scalar_one_or_none()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    count = (await db.execute(
+        select(func.count(CourseReview.id)).where(CourseReview.course_id == course.id)
+    )).scalar() or 0
+
+    rows = await db.execute(
+        select(CourseReview, User.display_name)
+        .join(User, User.id == CourseReview.user_id)
+        .where(CourseReview.course_id == course.id)
+        .order_by(CourseReview.created_at.desc())
+        .offset((page - 1) * size)
+        .limit(size)
+    )
+    items = [
+        CourseReviewResponse(
+            id=r.id, user_id=r.user_id, display_name=display_name,
+            rating=r.rating, review=r.review, created_at=r.created_at,
+        ).model_dump()
+        for r, display_name in rows.all()
+    ]
+    return PaginatedResponse(
+        items=items, total=count, page=page, size=size,
+        pages=(count + size - 1) // size if count > 0 else 0,
+    )
+
+
+@router.post("/{course_slug}/reviews", response_model=CourseReviewResponse, status_code=status.HTTP_201_CREATED)
+async def create_review(
+    course_slug: str,
+    data: CourseReviewCreate,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Course).where(Course.slug == course_slug, Course.deleted_at.is_(None))
+    )
+    course = result.scalar_one_or_none()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    enrolled = (await db.execute(
+        select(Enrollment).where(
+            Enrollment.user_id == current_user.id, Enrollment.course_id == course.id
+        )
+    )).scalar_one_or_none()
+    if not enrolled:
+        raise HTTPException(status_code=403, detail="Enroll before reviewing this course")
+
+    existing = (await db.execute(
+        select(CourseReview).where(
+            CourseReview.user_id == current_user.id, CourseReview.course_id == course.id
+        )
+    )).scalar_one_or_none()
+    if existing:
+        existing.rating = data.rating
+        existing.review = data.review
+        existing.updated_at = datetime.now(timezone.utc)
+        review = existing
+    else:
+        review = CourseReview(
+            user_id=current_user.id, course_id=course.id,
+            rating=data.rating, review=data.review,
+        )
+        db.add(review)
+
+    await db.flush()
+
+    # Recompute aggregate rating.
+    agg = (await db.execute(
+        select(func.avg(CourseReview.rating), func.count(CourseReview.id))
+        .where(CourseReview.course_id == course.id)
+    )).one()
+    course.rating_average = round(float(agg[0] or 0), 2)
+    course.rating_count = int(agg[1] or 0)
+
+    await delete_cache(f"course:detail:{course.slug}")
+    await clear_cache_pattern("courses:list:*")
+
+    return CourseReviewResponse(
+        id=review.id, user_id=review.user_id,
+        display_name=current_user.display_name,
+        rating=review.rating, review=review.review,
+        created_at=review.created_at or datetime.now(timezone.utc),
+    )

@@ -6,7 +6,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/dsir
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@db:5432/dsir
       - REDIS_URL=redis://redis:6379/0
       - JWT_SECRET_KEY=local-dev-secret-change-in-production
       - DEBUG=true

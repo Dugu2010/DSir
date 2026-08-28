@@ -19,23 +19,23 @@ export function Tabs({ tabs, activeTab, onChange, className }: TabsProps) {
           className={cn(
             'relative px-4 py-3 text-sm font-medium transition-colors',
             activeTab === tab.id
-              ? 'text-brand-600'
+              ? 'text-coral-700 dark:text-coral-400'
               : 'text-ink-secondary hover:text-ink',
           )}
         >
           {tab.label}
           {tab.count !== undefined && (
             <span className={cn(
-              'ml-1.5 rounded-full px-1.5 py-0.5 text-xs',
+              'ml-1.5 rounded-full px-1.5 py-0.5 text-xs font-mono',
               activeTab === tab.id
-                ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400'
-                : 'bg-surface-secondary text-ink-tertiary',
+                ? 'bg-coral-100 text-coral-800 dark:bg-coral-500/10 dark:text-coral-400'
+                : 'bg-surface-tertiary text-ink-tertiary',
             )}>
               {tab.count}
             </span>
           )}
           {activeTab === tab.id && (
-            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-600 rounded-full" />
+            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-coral-500 rounded-full" />
           )}
         </button>
       ))}

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import get_db
@@ -6,18 +6,42 @@ from app.models import User, RefreshToken, UserStats
 from app.schemas import (
     UserCreate, UserLogin, TokenResponse,
     RefreshTokenRequest, PasswordChangeRequest, UserResponse,
+    PasswordResetRequest, PasswordResetConfirm,
 )
 from app.utils.security import (
     hash_password, verify_password, create_access_token,
-    create_refresh_token, decode_token,
+    create_refresh_token, decode_token, generate_password_reset_token,
 )
 from app.utils.deps import get_current_active_user
+from app.services.email import send_email
 from datetime import datetime, timezone
 from uuid import UUID
+import asyncio
 from app.config import get_settings
 
 settings = get_settings()
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+# ── Redis token helpers (password reset + email verification) ──
+
+async def _redis_set(key: str, value: str, ttl: int) -> None:
+    from app.utils.redis import get_redis_client
+    client = await get_redis_client()
+    await client.set(key, value, ex=ttl)
+
+
+async def _redis_get(key: str):
+    from app.utils.redis import get_redis_client
+    client = await get_redis_client()
+    val = await client.get(key)
+    return val.decode() if val else None
+
+
+async def _redis_delete(key: str) -> None:
+    from app.utils.redis import get_redis_client
+    client = await get_redis_client()
+    await client.delete(key)
 
 
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -55,6 +79,9 @@ async def signup(data: UserCreate, db: AsyncSession = Depends(get_db)):
         expires_at=expires_at,
     )
     db.add(refresh)
+
+    # Queue an email verification link (no-op if SMTP is not configured).
+    asyncio.create_task(_send_verification(user))
 
     return TokenResponse(access_token=access_token, refresh_token=raw_refresh)
 
@@ -154,3 +181,109 @@ async def change_password(
 
     current_user.password_hash = hash_password(data.new_password)
     return {"detail": "Password changed successfully"}
+
+
+# ── Password Reset ──────────────────────────────────────────────
+
+async def _send_verification(user: User) -> None:
+    token = generate_password_reset_token()
+    try:
+        await _redis_set(f"verify:{token}", str(user.id), ttl=86400)
+    except Exception:
+        return
+    link = f"{settings.FRONTEND_URL}/verify-email?token={token}"
+    await asyncio.to_thread(
+        send_email,
+        user.email,
+        "Verify your DSir email",
+        f'<p>Welcome to DSir! Verify your email to unlock your account:</p>'
+        f'<p><a href="{link}">{link}</a></p>',
+    )
+
+
+@router.post("/forgot-password")
+async def forgot_password(data: PasswordResetRequest, db: AsyncSession = Depends(get_db)):
+    generic = {"detail": "If that email is registered, a reset link has been sent."}
+    result = await db.execute(
+        select(User).where(User.email == data.email, User.deleted_at.is_(None))
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        return generic
+
+    token = generate_password_reset_token()
+    try:
+        await _redis_set(f"pwreset:{token}", str(user.id), ttl=1800)
+    except Exception:
+        raise HTTPException(status_code=503, detail="Reset service unavailable. Try again later.")
+
+    link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
+    await asyncio.to_thread(
+        send_email,
+        user.email,
+        "Reset your DSir password",
+        f'<p>Click below to reset your DSir password:</p>'
+        f'<p><a href="{link}">{link}</a></p>'
+        f'<p>This link expires in 30 minutes.</p>',
+    )
+
+    if settings.EMAIL_TOKEN_IN_RESPONSE or settings.DEBUG:
+        return {**generic, "reset_token": token, "reset_link": link}
+    return generic
+
+
+@router.post("/reset-password")
+async def reset_password(data: PasswordResetConfirm, db: AsyncSession = Depends(get_db)):
+    try:
+        user_id = await _redis_get(f"pwreset:{data.token}")
+    except Exception:
+        raise HTTPException(status_code=503, detail="Reset service unavailable. Try again later.")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    result = await db.execute(select(User).where(User.id == UUID(user_id), User.deleted_at.is_(None)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+
+    user.password_hash = hash_password(data.new_password)
+    await _redis_delete(f"pwreset:{data.token}")
+
+    # Revoke all refresh tokens so stolen sessions can't survive a reset.
+    tokens = await db.execute(
+        select(RefreshToken).where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
+    )
+    now = datetime.now(timezone.utc)
+    for t in tokens.scalars().all():
+        t.revoked_at = now
+
+    return {"detail": "Password reset successfully. You can now sign in."}
+
+
+# ── Email Verification ──────────────────────────────────────────
+
+@router.post("/verify-email")
+async def verify_email(token: str = Query(...), db: AsyncSession = Depends(get_db)):
+    try:
+        user_id = await _redis_get(f"verify:{token}")
+    except Exception:
+        raise HTTPException(status_code=503, detail="Verification service unavailable. Try again later.")
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+
+    result = await db.execute(select(User).where(User.id == UUID(user_id)))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired verification token")
+
+    user.email_verified = True
+    await _redis_delete(f"verify:{token}")
+    return {"detail": "Email verified successfully"}
+
+
+@router.post("/resend-verification")
+async def resend_verification(current_user: User = Depends(get_current_active_user)):
+    if current_user.email_verified:
+        return {"detail": "Email already verified"}
+    await _send_verification(current_user)
+    return {"detail": "Verification email sent"}

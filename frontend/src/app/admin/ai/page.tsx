@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/Button";
@@ -27,11 +27,38 @@ export default function AdminAIPage() {
   const [step, setStep] = useState<Step>("upload");
   const [error, setError] = useState("");
   const [structure, setStructure] = useState<any>(null);
+  const [sourceId, setSourceId] = useState("");
   const [summary, setSummary] = useState<any>(null);
   const [textPreview, setTextPreview] = useState("");
   const [textLen, setTextLen] = useState(0);
   const [importResult, setImportResult] = useState<any>(null);
+  const [progress, setProgress] = useState<{ generated: number; total: number; done: boolean } | null>(null);
   const [expandedMods, setExpandedMods] = useState<Set<number>>(new Set());
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
+  const headers = { Authorization: `Bearer ${token}` };
+
+  // Poll generation progress until all lessons are ready.
+  useEffect(() => {
+    if (step !== "importing" || !importResult?.course_slug) return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch(`${API}/api/v1/admin/ai/import/${importResult.course_slug}/status`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok || cancelled) return;
+        const s = await res.json();
+        setProgress({ generated: s.generated, total: s.total, done: s.done });
+        if (s.done) setStep("done");
+      } catch {
+        // transient network error — keep polling
+      }
+    };
+    poll();
+    const iv = setInterval(poll, 3000);
+    return () => { cancelled = true; clearInterval(iv); };
+  }, [step, importResult?.course_slug, token]);
 
   const isAdmin = user?.role === "superadmin" || user?.role === "admin";
   if (!isAdmin) {
@@ -40,14 +67,11 @@ export default function AdminAIPage() {
         <div className="h-16 w-16 rounded-2xl bg-red-100 dark:bg-red-500/10 flex items-center justify-center mx-auto mb-4">
           <AlertCircle className="h-8 w-8 text-red-500" />
         </div>
-        <h2 className="text-xl font-bold text-ink">Admin Access Only</h2>
+        <h2 className="font-display text-xl font-semibold text-ink">Admin Access Only</h2>
         <p className="text-ink-secondary mt-2">This page requires admin privileges.</p>
       </div>
     );
   }
-
-  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : "";
-  const headers = { Authorization: `Bearer ${token}` };
 
   const uploadAndPreview = async () => {
     if (!file) return;
@@ -61,11 +85,12 @@ export default function AdminAIPage() {
         method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd,
       });
       if (!res.ok) {
-        const e = await res.json().catch(() => ({ detail: "Failed" }));
-        throw new Error(e.detail || "Preview failed");
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.message || e.detail || "Preview failed");
       }
       const data = await res.json();
       setStructure(data.structure);
+      setSourceId(data.source_id || "");
       setSummary(data.summary);
       setTextPreview(data.text_preview || "");
       setTextLen(data.text_length || 0);
@@ -87,16 +112,17 @@ export default function AdminAIPage() {
       const res = await fetch(`${API}/api/v1/admin/ai/import`, {
         method: "POST",
         headers: { ...headers, "Content-Type": "application/json" },
-        body: JSON.stringify(structure),
+        body: JSON.stringify({ ...structure, source_id: sourceId }),
       });
       if (!res.ok) {
-        const e = await res.json().catch(() => ({ detail: "Import failed" }));
-        throw new Error(e.detail || "Import failed");
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.message || e.detail || "Import failed");
       }
       const data = await res.json();
       setImportResult(data);
-      setStep("done");
-      toast.success(`${data.lesson_count} lessons, ${data.exercise_count} exercises imported!`);
+      setProgress({ generated: 0, total: data.lesson_count || 0, done: data.lesson_count === 0 });
+      setStep("importing");
+      toast.success(`Course created — generating ${data.lesson_count} lessons in the background...`);
     } catch (e: any) {
       setError(e.message);
       setStep("error");
@@ -106,7 +132,7 @@ export default function AdminAIPage() {
 
   const reset = () => {
     setFile(null); setTopic(""); setStep("upload"); setError("");
-    setStructure(null); setSummary(null); setImportResult(null);
+    setStructure(null); setSourceId(""); setSummary(null); setImportResult(null);
     setTextPreview(""); setTextLen(0);
   };
 
@@ -127,8 +153,9 @@ export default function AdminAIPage() {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-ink flex items-center gap-3">
-            <Sparkles className="h-6 w-6 text-brand-600" />
+          <p className="eyebrow mb-2">Admin tools</p>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink flex items-center gap-3">
+            <Sparkles className="h-6 w-6 text-coral-600 dark:text-coral-400" />
             AI Course Generator
           </h1>
           <p className="text-ink-secondary mt-1">
@@ -141,23 +168,23 @@ export default function AdminAIPage() {
             onDragOver={e => e.preventDefault()}
             onDrop={handleDrop}
             onClick={() => fileRef.current?.click()}
-            className="border-2 border-dashed border-[#e8ecf1] dark:border-white/10 rounded-2xl p-10 text-center cursor-pointer hover:border-brand-300 dark:hover:border-brand-500/30 transition-colors"
+            className="border-2 border-dashed border-border dark:border-white/15 rounded-2xl p-10 text-center cursor-pointer hover:border-coral-400 dark:hover:border-coral-500/40 transition-colors"
           >
             <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md,.py" onChange={e => { const f = e.target.files?.[0]; if (f) { setFile(f); setStep("upload"); setError(""); } }} className="hidden" />
             {file ? (
               <div className="space-y-2">
-                <div className="h-14 w-14 rounded-2xl bg-brand-50 dark:bg-brand-500/10 flex items-center justify-center mx-auto">
-                  <FileText className="h-7 w-7 text-brand-600" />
+                <div className="h-14 w-14 rounded-2xl bg-coral-50 dark:bg-coral-500/10 flex items-center justify-center mx-auto">
+                  <FileText className="h-7 w-7 text-coral-600 dark:text-coral-400" />
                 </div>
-                <p className="font-semibold text-ink text-lg">{file.name}</p>
+                <p className="font-display font-semibold text-ink text-lg">{file.name}</p>
                 <p className="text-sm text-ink-tertiary">{(file.size / 1024).toFixed(0)} KB</p>
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="h-14 w-14 rounded-2xl bg-[#f1f3f5] dark:bg-white/5 flex items-center justify-center mx-auto">
+                <div className="h-14 w-14 rounded-2xl bg-surface-tertiary dark:bg-white/5 flex items-center justify-center mx-auto">
                   <Upload className="h-7 w-7 text-ink-tertiary" />
                 </div>
-                <p className="font-semibold text-ink">Drop your file here</p>
+                <p className="font-display font-semibold text-ink">Drop your file here</p>
                 <p className="text-sm text-ink-tertiary">PDF · Image · Text · Code — even handwritten notes</p>
               </div>
             )}
@@ -169,7 +196,7 @@ export default function AdminAIPage() {
                 type="text" value={topic}
                 onChange={e => setTopic(e.target.value)}
                 placeholder="What's this about? (e.g. Python Programming)"
-                className="w-full h-10 px-4 rounded-xl border border-[#e8ecf1] dark:border-white/10 bg-white dark:bg-[#0d0d13] text-sm text-ink placeholder:text-ink-tertiary focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full h-10 px-4 rounded-xl border border-border dark:border-white/10 bg-surface text-sm text-ink placeholder:text-ink-tertiary focus:outline-none focus:ring-2 focus:ring-coral-500"
               />
               <Button
                 onClick={uploadAndPreview}
@@ -210,8 +237,9 @@ export default function AdminAIPage() {
       <div className="max-w-4xl mx-auto space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-ink flex items-center gap-3">
-              <Sparkles className="h-6 w-6 text-brand-600" />
+            <p className="eyebrow mb-2">Review</p>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-ink flex items-center gap-3">
+              <Sparkles className="h-6 w-6 text-coral-600 dark:text-coral-400" />
               Course Preview
             </h1>
             <p className="text-ink-secondary mt-1">Review the structure before importing</p>
@@ -226,7 +254,7 @@ export default function AdminAIPage() {
 
         {/* Course header */}
         <Card padding="lg">
-          <h2 className="text-xl font-bold text-ink">{course.title}</h2>
+          <h2 className="font-display text-xl font-semibold text-ink">{course.title}</h2>
           <div className="flex flex-wrap gap-2 mt-3">
             <Badge variant="outline">{course.difficulty}</Badge>
             <Badge variant="outline">{summary?.modules} modules</Badge>
@@ -246,17 +274,17 @@ export default function AdminAIPage() {
             <Card key={mi} padding="none" className="overflow-hidden">
               <button
                 onClick={() => toggleModule(mi)}
-                className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-[#f8fafc] dark:hover:bg-white/[0.03] transition-colors"
+                className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-surface-tertiary/50 dark:hover:bg-white/[0.03] transition-colors"
               >
-                <span className="h-7 w-7 rounded-lg bg-brand-100 dark:bg-brand-500/10 flex items-center justify-center text-xs font-bold text-brand-600 dark:text-brand-400 flex-shrink-0">
+                <span className="h-7 w-7 rounded-lg bg-coral-100 dark:bg-coral-500/10 flex items-center justify-center text-xs font-bold text-coral-600 dark:text-coral-400 flex-shrink-0">
                   {String(mi + 1).padStart(2, "0")}
                 </span>
-                <span className="font-semibold text-ink text-sm flex-1">{mod.title}</span>
+                <span className="font-display font-semibold text-ink text-sm flex-1">{mod.title}</span>
                 <Badge size="sm" variant="outline">{mod.lessons?.length || 0} lessons</Badge>
                 {expandedMods.has(mi) ? <ChevronDown className="h-4 w-4 text-ink-tertiary" /> : <ChevronRight className="h-4 w-4 text-ink-tertiary" />}
               </button>
               {expandedMods.has(mi) && (
-                <div className="border-t border-[#e8ecf1] dark:border-white/5 px-5 py-2 space-y-1 bg-[#fafbfc] dark:bg-white/[0.02]">
+                <div className="border-t border-border dark:border-white/5 px-5 py-2 space-y-1 bg-surface-tertiary/40 dark:bg-white/[0.02]">
                   {mod.lessons?.map((l: any, li: number) => (
                     <div key={li} className="flex items-center gap-3 px-2 py-2 rounded-lg text-sm">
                       <Play className="h-3 w-3 text-ink-tertiary flex-shrink-0" />
@@ -287,14 +315,34 @@ export default function AdminAIPage() {
 
   // ── IMPORTING ──
   if (step === "importing") {
+    const pct = progress && progress.total > 0 ? Math.round((progress.generated / progress.total) * 100) : 0;
     return (
       <div className="max-w-xl mx-auto">
-        <Card padding="lg" className="text-center space-y-4">
-          <div className="h-16 w-16 rounded-2xl bg-brand-50 dark:bg-brand-500/10 flex items-center justify-center mx-auto">
-            <Loader2 className="h-8 w-8 text-brand-600 animate-spin" />
+        <Card padding="lg" className="text-center space-y-6">
+          <div className="h-16 w-16 rounded-2xl bg-coral-50 dark:bg-coral-500/10 flex items-center justify-center mx-auto">
+            <Loader2 className="h-8 w-8 text-coral-600 dark:text-coral-400 animate-spin" />
           </div>
-          <p className="font-semibold text-ink text-lg">Importing course...</p>
-          <p className="text-ink-secondary text-sm">Generating lesson content with AI — this may take a minute</p>
+          <div>
+            <p className="font-display font-semibold text-ink text-lg">Generating course content...</p>
+            <p className="text-ink-secondary text-sm mt-1">
+              {progress ? `${progress.generated} of ${progress.total} lessons ready` : "Starting..."}
+            </p>
+          </div>
+          <div className="h-2.5 rounded-full bg-surface-tertiary dark:bg-white/10 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-coral-500 transition-all duration-500"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <p className="text-xs text-ink-tertiary">
+            This runs in the background — you can leave this page and come back later.
+          </p>
+          <div className="flex justify-center gap-2">
+            <Link href={`/courses/${importResult?.course_slug}`}>
+              <Button variant="outline" size="sm">View course now</Button>
+            </Link>
+            <Button variant="ghost" size="sm" onClick={reset}>Create another</Button>
+          </div>
         </Card>
       </div>
     );
@@ -309,11 +357,11 @@ export default function AdminAIPage() {
             <CheckCircle2 className="h-8 w-8 text-emerald-600" />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-ink">Course Imported!</h2>
+            <h2 className="font-display text-xl font-semibold text-ink">Course Imported!</h2>
+            <p className="text-ink-secondary text-sm mt-1">All lesson content and exercises generated.</p>
             <div className="flex justify-center gap-3 mt-3">
               <Badge variant="outline">{importResult.module_count} modules</Badge>
               <Badge variant="outline">{importResult.lesson_count} lessons</Badge>
-              <Badge variant="outline">{importResult.exercise_count} exercises</Badge>
             </div>
           </div>
           <div className="flex justify-center gap-3">

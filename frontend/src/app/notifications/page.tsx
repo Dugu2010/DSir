@@ -25,13 +25,16 @@ export default function NotificationsPage() {
   });
 
   const readAllMutation = useMutation({
-    mutationFn: async () => {
-      await fetch("/api/v1/users/me/notifications/read-all", { method: "POST" });
-    },
+    mutationFn: () => users.markAllNotificationsRead(),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
       toast.success("All marked as read");
     },
+  });
+
+  const markReadMutation = useMutation({
+    mutationFn: (id: string) => users.markNotificationRead(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["notifications"] }),
   });
 
   if (isLoading) return <PageLoader />;
@@ -42,7 +45,8 @@ export default function NotificationsPage() {
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-ink flex items-center gap-2">
+          <p className="eyebrow mb-2">Updates</p>
+          <h1 className="font-display text-3xl font-semibold tracking-tight text-ink flex items-center gap-2">
             <Bell className="h-7 w-7" />
             Notifications
           </h1>
@@ -60,17 +64,22 @@ export default function NotificationsPage() {
           {notifications.map((n: { id: string; type: string; title: string; body: string | null; is_read: boolean; created_at: string }) => {
             const Icon = iconMap[n.type] || Info;
             return (
-              <Card key={n.id} padding="md" className={`transition-all ${!n.is_read ? "bg-brand-50/50 dark:bg-brand-950/20 border-brand-200 dark:border-brand-900" : ""}`}>
+              <Card
+                key={n.id}
+                padding="md"
+                onClick={!n.is_read ? () => markReadMutation.mutate(n.id) : undefined}
+                className={`transition-all ${!n.is_read ? "bg-coral-50/40 dark:bg-coral-500/5 border-coral-200 dark:border-coral-500/20 cursor-pointer" : ""}`}
+              >
                 <div className="flex items-start gap-3">
                   <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    !n.is_read ? "bg-brand-100 dark:bg-brand-900" : "bg-surface-secondary"
+                    !n.is_read ? "bg-coral-100 dark:bg-coral-500/10" : "bg-surface-secondary dark:bg-white/5"
                   }`}>
-                    <Icon className="h-5 w-5 text-brand-600" />
+                    <Icon className="h-5 w-5 text-coral-600 dark:text-coral-400" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className={`text-sm ${!n.is_read ? "font-semibold text-ink" : "text-ink"}`}>{n.title}</p>
-                      {!n.is_read && <div className="h-2 w-2 rounded-full bg-brand-500 flex-shrink-0" />}
+                      {!n.is_read && <div className="h-2 w-2 rounded-full bg-coral-500 flex-shrink-0" />}
                     </div>
                     {n.body && <p className="text-sm text-ink-secondary mt-0.5">{n.body}</p>}
                     <p className="text-xs text-ink-tertiary mt-1">
@@ -90,8 +99,8 @@ export default function NotificationsPage() {
       ) : (
         <div className="text-center py-16">
           <Bell className="h-12 w-12 text-ink-tertiary mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-ink">No notifications yet</h3>
-          <p className="text-sm text-ink-secondary mt-1">You'll receive notifications about your learning progress and achievements.</p>
+          <h3 className="font-display text-lg font-semibold text-ink">No notifications yet</h3>
+          <p className="text-sm text-ink-secondary mt-1">You&apos;ll receive notifications about your learning progress and achievements.</p>
         </div>
       )}
     </div>

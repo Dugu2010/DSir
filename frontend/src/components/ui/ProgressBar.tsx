@@ -7,23 +7,24 @@ interface ProgressBarProps {
   value: number;
   max?: number;
   size?: 'sm' | 'md' | 'lg';
-  variant?: 'brand' | 'success' | 'warning';
+  variant?: 'brand' | 'success' | 'warning' | 'coral';
   showLabel?: boolean;
   className?: string;
 }
 
-export function ProgressBar({ value, max = 100, size = 'md', variant = 'brand', showLabel = true, className }: ProgressBarProps) {
+export function ProgressBar({ value, max = 100, size = 'md', variant = 'coral', showLabel = true, className }: ProgressBarProps) {
   const percentage = Math.min(Math.round((value / max) * 100), 100);
   const heights = { sm: 'h-1.5', md: 'h-2.5', lg: 'h-4' };
   const colors = {
-    brand: 'bg-brand-600',
+    brand: 'bg-coral-500',
+    coral: 'bg-coral-500',
     success: 'bg-emerald-500',
     warning: 'bg-amber-500',
   };
 
   return (
     <div className={cn('w-full', className)}>
-      <div className={cn('w-full rounded-full bg-surface-secondary overflow-hidden', heights[size])}>
+      <div className={cn('w-full rounded-full bg-surface-tertiary overflow-hidden', heights[size])}>
         <div
           className={cn('h-full rounded-full transition-all duration-500 ease-out', colors[variant])}
           style={{ width: `${percentage}%` }}

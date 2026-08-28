@@ -30,7 +30,7 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <QueryClientProvider client={queryClient}>
       {ready ? children : (
         <div className="min-h-screen flex items-center justify-center">
-          <div className="h-8 w-8 border-2 border-brand-600 border-t-transparent rounded-full animate-spin" />
+          <div className="h-8 w-8 border-2 border-coral-500 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
       <Toaster
@@ -41,6 +41,9 @@ export function Providers({ children }: { children: React.ReactNode }) {
             borderRadius: "12px",
             padding: "12px 16px",
             fontSize: "14px",
+            background: "var(--toast-bg)",
+            color: "var(--toast-color)",
+            border: "1px solid rgb(var(--border))",
           },
         }}
       />

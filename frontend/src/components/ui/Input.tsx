@@ -35,7 +35,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
               "w-full h-10 px-3 rounded-xl border bg-surface text-ink text-sm",
               "placeholder:text-ink-tertiary",
               "transition-all duration-150",
-              "focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500",
+              "focus:outline-none focus:ring-2 focus:ring-coral-500 focus:border-coral-500",
               "disabled:opacity-50 disabled:cursor-not-allowed",
               leftIcon && "pl-10",
               error
@@ -47,7 +47,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           />
         </div>
         {error && (
-          <p className="flex items-center gap-1 text-xs text-red-600">
+          <p className="flex items-center gap-1 text-xs text-red-600 dark:text-red-400">
             <AlertCircle className="h-3 w-3" />
             {error}
           </p>

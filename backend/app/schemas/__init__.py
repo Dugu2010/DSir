@@ -231,6 +231,7 @@ class ModuleResponse(BaseModel):
     display_order: int
     lesson_count: int
     estimated_duration_minutes: Optional[int]
+    lessons: list["LessonListItem"] = []
 
     class Config:
         from_attributes = True
@@ -344,6 +345,133 @@ class QuizSubmission(BaseModel):
     answers: dict[str, Any]
 
 
+class QuizDetailResponse(BaseModel):
+    id: UUID
+    title: str
+    description: Optional[str]
+    passing_score: int
+    time_limit_minutes: Optional[int]
+    questions: list["QuestionResponse"] = []
+
+    class Config:
+        from_attributes = True
+
+
+class QuizResultResponse(BaseModel):
+    quiz_id: UUID
+    score: float
+    passed: bool
+    total_points: int
+    earned_points: int
+    correct_answers: int
+    total_questions: int
+    completed_at: datetime
+
+
+# ── Projects ────────────────────────────────────────────────────
+
+class ProjectDetailResponse(BaseModel):
+    id: UUID
+    course_id: Optional[UUID]
+    module_id: Optional[UUID]
+    title: str
+    description: str
+    requirements: str
+    difficulty: str
+    is_capstone: bool
+    estimated_duration_hours: Optional[int]
+    skill_tags: Optional[list[str]]
+    starter_files: Optional[dict]
+
+    class Config:
+        from_attributes = True
+
+
+class ProjectSubmitRequest(BaseModel):
+    code_files: dict
+
+
+class ProjectSubmissionResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    code_files: dict
+    review_status: str
+    review_feedback: Optional[str]
+    review_score: Optional[float]
+    submitted_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── Discussions ─────────────────────────────────────────────────
+
+class DiscussionCreate(BaseModel):
+    lesson_id: Optional[UUID] = None
+    title: str = Field(min_length=1, max_length=255)
+    content: str
+
+
+class DiscussionResponse(BaseModel):
+    id: UUID
+    lesson_id: Optional[UUID]
+    user_id: UUID
+    display_name: str = ""
+    title: str
+    content: str
+    is_resolved: bool
+    vote_count: int
+    reply_count: int
+    created_at: datetime
+    updated_at: datetime
+    replies: list["DiscussionReplyResponse"] = []
+
+    class Config:
+        from_attributes = True
+
+
+class DiscussionReplyCreate(BaseModel):
+    content: str
+    parent_id: Optional[UUID] = None
+
+
+class DiscussionReplyResponse(BaseModel):
+    id: UUID
+    discussion_id: UUID
+    user_id: UUID
+    display_name: str = ""
+    parent_id: Optional[UUID]
+    content: str
+    is_solution: bool
+    vote_count: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class VoteRequest(BaseModel):
+    direction: str = Field(pattern="^(up|down)$")
+
+
+# ── Leaderboard ─────────────────────────────────────────────────
+
+class LeaderboardEntryResponse(BaseModel):
+    user_id: UUID
+    display_name: str
+    avatar_url: Optional[str]
+    xp_earned: int
+    rank: int
+    current_level: int
+
+
+class UserRankResponse(BaseModel):
+    rank: int
+    xp_earned: int
+    period_type: str
+
+
 # ── Exercises ───────────────────────────────────────────────────
 
 class ExerciseResponse(BaseModel):
@@ -365,8 +493,8 @@ class ExerciseResponse(BaseModel):
 
 
 class ExerciseDetailResponse(ExerciseResponse):
-    hints: list[dict]
-    test_count: int
+    hints: list[dict] = []
+    test_count: int = 0
 
 
 class CodeSubmission(BaseModel):
@@ -448,6 +576,15 @@ class UserNoteResponse(BaseModel):
         from_attributes = True
 
 
+class CertificateResponse(BaseModel):
+    id: UUID
+    course_id: UUID
+    certificate_number: str
+    issued_at: datetime
+    course_title: str
+    course_slug: str
+
+
 # ── Flashcards ──────────────────────────────────────────────────
 
 class FlashcardCreate(BaseModel):
@@ -523,7 +660,7 @@ class AIConversationResponse(BaseModel):
     is_archived: bool
     created_at: datetime
     updated_at: datetime
-    message_count: int
+    message_count: int = 0
 
     class Config:
         from_attributes = True
@@ -580,7 +717,7 @@ class AdminDashboardStats(BaseModel):
 
 class SearchResult(BaseModel):
     courses: list[CourseListItem] = []
-    lessons: list[LessonListItem] = []
+    lessons: list["LessonListItem"] = []
 
 
 # ── Admin AI ────────────────────────────────────────────────────
@@ -597,6 +734,60 @@ class AICourseImportResponse(BaseModel):
     exercise_count: int
 
 
+# ── Quiz Attempts ───────────────────────────────────────────────
+
+class QuizAttemptResponse(BaseModel):
+    id: UUID
+    quiz_id: UUID
+    score: float
+    passed: bool
+    earned_points: int
+    total_points: int
+    correct_answers: int
+    total_questions: int
+    completed_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# ── Course Reviews ───────────────────────────────────────────────
+
+class CourseReviewCreate(BaseModel):
+    rating: int = Field(ge=1, le=5)
+    review: Optional[str] = Field(default=None, max_length=2000)
+
+
+class CourseReviewResponse(BaseModel):
+    id: UUID
+    user_id: UUID
+    display_name: str
+    rating: int
+    review: Optional[str]
+    created_at: datetime
+
+
+# ── Daily Goals ──────────────────────────────────────────────────
+
+class DailyGoalUpdate(BaseModel):
+    target_minutes: int = Field(ge=5, le=480)
+    target_lessons: int = Field(ge=1, le=50)
+    target_exercises: int = Field(ge=1, le=100)
+
+
+# ── Knowledge / Mastery ──────────────────────────────────────────
+
+class KnowledgeItemResponse(BaseModel):
+    topic: str
+    slug: str
+    mastery_level: float
+    confidence: float
+    assessment_count: int
+
+
 # ── Rebuild forward refs ────────────────────────────────────────
 
+ModuleResponse.model_rebuild()
 QuestionResponse.model_rebuild()
+QuizDetailResponse.model_rebuild()
+DiscussionResponse.model_rebuild()

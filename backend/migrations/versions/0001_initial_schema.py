@@ -200,7 +200,7 @@ def upgrade() -> None:
         sa.Column("starter_code", sa.Text, nullable=True),
         sa.Column("solution_code", sa.Text, nullable=False),
         sa.Column("test_code", sa.Text, nullable=True),
-        sa.Column("hints", postgresql.JSON, nullable=False, server_default="'[]'::jsonb"),
+        sa.Column("hints", postgresql.JSON, nullable=False, server_default=sa.text("'[]'::jsonb")),
         sa.Column("skill_tags", postgresql.ARRAY(sa.Text), nullable=True),
         sa.Column("estimated_duration_minutes", sa.Integer, nullable=True),
         sa.Column("points", sa.Integer, nullable=False, server_default="10"),

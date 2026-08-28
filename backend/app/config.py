@@ -1,6 +1,7 @@
+from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-from typing import Optional
+from typing import Any, Optional
 
 
 class Settings(BaseSettings):
@@ -14,12 +15,16 @@ class Settings(BaseSettings):
     HOST: str = "0.0.0.0"
     PORT: int = 8000
     WORKERS: int = 4
+    FRONTEND_URL: str = "http://localhost:3000"
 
     # Database - Render provides postgres:// which we convert to postgresql+psycopg://
     DATABASE_URL: str = "postgresql+psycopg://postgres:postgres@localhost:5432/dsir"
+    DATABASE_READ_REPLICA_URL: Optional[str] = None  # For read replicas
     DATABASE_POOL_SIZE: int = 20
     DATABASE_MAX_OVERFLOW: int = 10
     DATABASE_POOL_RECYCLE: int = 3600
+    # Slow query logging (in seconds)
+    DATABASE_SLOW_QUERY_THRESHOLD: float = 1.0
 
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -68,7 +73,13 @@ class Settings(BaseSettings):
     RATE_LIMIT_AUTH_WINDOW: int = 60
 
     # CORS
-    CORS_ORIGINS: list[str] = ["http://localhost:3000", "https://dsir-umber.vercel.app", "https://dsir.vercel.app"]
+    CORS_ORIGINS: list[str] = [
+        "http://localhost:3000",
+        "https://dsir-umber.vercel.app",
+        "https://dsir.vercel.app",
+        "https://dsir.dshost.dpdns.org",
+        "https://api.dshost.dpdns.org",
+    ]
 
     # Logging
     LOG_LEVEL: str = "INFO"
@@ -80,16 +91,28 @@ class Settings(BaseSettings):
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     EMAIL_FROM: str = "noreply@dsir.dev"
+    # When True, password-reset / verification tokens are returned in the API
+    # response (dev convenience). In production they are emailed instead.
+    EMAIL_TOKEN_IN_RESPONSE: bool = False
 
     # Feature Flags
     ENABLE_AI_FEATURES: bool = True
     ENABLE_SANDBOX: bool = True
     ENABLE_REGISTRATION: bool = True
+    CHAOS_ENABLED: bool = False  # Chaos Engineering
 
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def _coerce_empty_values_to_none(cls, values: dict[str, Any]) -> dict[str, Any]:
+        for key, value in values.items():
+            if isinstance(value, str) and (value.strip() == "" or value.lstrip().startswith("#")):
+                values[key] = None
+        return values
 
 
 @lru_cache()

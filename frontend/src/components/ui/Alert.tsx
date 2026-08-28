@@ -12,17 +12,17 @@ const icons = {
 };
 
 const styles = {
-  success: 'border-emerald-200 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/50',
-  error: 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950/50',
-  warning: 'border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/50',
-  info: 'border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/50',
+  success: 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/40',
+  error: 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40',
+  warning: 'border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40',
+  info: 'border-coral-300 bg-coral-50 dark:border-coral-800 dark:bg-coral-950/30',
 };
 
 const iconColors = {
   success: 'text-emerald-500',
   error: 'text-red-500',
   warning: 'text-amber-500',
-  info: 'text-sky-500',
+  info: 'text-coral-500',
 };
 
 interface AlertProps {
