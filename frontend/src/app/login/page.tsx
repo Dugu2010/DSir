@@ -112,7 +112,7 @@ export default function LoginPage() {
         <div className="hidden lg:flex relative border-l border-border dark:border-white/5 bg-ink dark:bg-night-500 items-center justify-center p-12 overflow-hidden">
           <button
             onClick={toggleTheme}
-            className="absolute top-6 right-6 p-2 rounded-lg bg-white/5 hover:bg-white/10 text-paper-50/70 hover:text-paper-50 transition-colors"
+            className="absolute top-6 right-6 p-4 rounded-lg bg-white/5 hover:bg-white/10 text-paper-50/70 hover:text-paper-50 transition-colors"
             aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           >
             {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

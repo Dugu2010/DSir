@@ -303,7 +303,7 @@ class Lesson(Base):
     skill_tags = Column(ARRAY(Text), nullable=True)
     is_free_preview = Column(Boolean, nullable=False, default=False)
     version = Column(Integer, nullable=False, default=1)
-    status = Column(SAEnum(ContentStatus, values_callable=lambda e: [m.value for m in e]), nullable=False, default=ContentStatus.DRAFT)
+    status = Column(SAEnum(ContentStatus, values_callable=lambda e: [m.value for m in e]), nullable=False, default=ContentStatus.DRAFT, index=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     published_at = Column(DateTime(timezone=True), nullable=True)
@@ -409,6 +409,7 @@ class Exercise(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
+    __table_args__ = (Index('ix_exercise_skill_tags', skill_tags, postgresql_using='gin'),)
 
     lesson = relationship("Lesson", back_populates="exercises")
     course = relationship("Course", back_populates="exercises")
@@ -446,6 +447,7 @@ class Submission(Base):
     attempt_number = Column(Integer, nullable=False, default=1)
     submitted_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    __table_args__ = (Index('ix_submission_user_id_submitted_at', user_id, submitted_at),)
 
     user = relationship("User", back_populates="submissions")
     exercise = relationship("Exercise")
@@ -866,8 +868,9 @@ class QuizAttempt(Base):
     total_questions = Column(Integer, nullable=False, default=0)
     passed = Column(Boolean, nullable=False, default=False)
     answers = Column(JSON, nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
-    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+completed_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+__table_args__ = (Index('ix_quizattempt_user_id_completed_at', user_id, completed_at),)
 
 
 # ── Course Reviews ──────────────────────────────────────────────

@@ -18,6 +18,7 @@ from app.services import code_runner
 from app.models import User
 from uuid import UUID
 from datetime import datetime, timezone, date
+from app.utils.redis import get_cache, set_cache
 
 router = APIRouter(prefix="/practice", tags=["Practice"])
 
@@ -83,6 +84,11 @@ async def get_exercise(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
+    cache_key = f"exercise:detail:{exercise_id}"
+    cached_exercise = await get_cache(cache_key)
+    if cached_exercise is not None:
+        return cached_exercise
+
     result = await db.execute(select(Exercise).where(Exercise.id == exercise_id))
     exercise = result.scalar_one_or_none()
     if not exercise:
@@ -101,6 +107,7 @@ async def get_exercise(
         hints=hints,
         test_count=len(exercise.test_code.split("\n")) if exercise.test_code else 0,
     )
+    await set_cache(cache_key, resp, expire=60)
     return resp
 
 

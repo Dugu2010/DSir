@@ -48,27 +48,28 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       className={`${fraunces.variable} ${jakarta.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  // DSir Academy defaults to DARK mode. First-time visitors get
-                  // dark; explicit light preference is respected.
-                  var t = localStorage.getItem('theme');
-                  if (t === 'light') {
-                    document.documentElement.classList.remove('dark');
-                  } else {
-                    document.documentElement.classList.add('dark');
-                    if (!t) localStorage.setItem('theme', 'dark');
-                  }
-                } catch(e) {}
-              })();
-            `,
-          }}
-        />
-      </head>
+<head>
+         <script
+           dangerouslySetInnerHTML={{
+             __html: `
+               (function() {
+                 try {
+                   // DSir Academy defaults to DARK mode. First-time visitors get
+                   // dark; explicit light preference is respected.
+                   var t = localStorage.getItem('theme');
+                   if (t === 'light') {
+                     document.documentElement.classList.remove('dark');
+                   } else {
+                     document.documentElement.classList.add('dark');
+                     if (!t) localStorage.setItem('theme', 'dark');
+                   }
+                 } catch(e) {}
+               })();
+             `,
+           }}
+         />
+         <meta name="viewport" content="width=device-width, initial-scale=1" />
+       </head>
       <body className="font-sans antialiased bg-surface-secondary text-ink transition-colors duration-300">
         <ThemeProvider>
           <Providers>

@@ -160,7 +160,7 @@ export default function LandingPage() {
           <div className="hidden sm:flex items-center gap-1">
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary transition-colors"
+              className="p-4 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary transition-colors"
               title={resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
               aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
@@ -189,7 +189,7 @@ export default function LandingPage() {
             </button>
             <button
               onClick={() => setMobileMenu(!mobileMenu)}
-              className="p-2 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5"
+              className="p-4 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5"
               aria-expanded={mobileMenu}
               aria-controls="mobile-menu"
               aria-label="Toggle navigation menu"
@@ -478,10 +478,10 @@ export default function LandingPage() {
               <span className="font-display font-bold text-lg text-ink">DSir Academy</span>
             </div>
             <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm text-ink-tertiary">
-              <Link href="/courses" className="hover:text-coral-600 dark:hover:text-coral-400 transition-colors">Courses</Link>
-              <Link href="/practice" className="hover:text-coral-600 dark:hover:text-coral-400 transition-colors">Practice</Link>
-              <Link href="/login" className="hover:text-coral-600 dark:hover:text-coral-400 transition-colors">Sign In</Link>
-              <Link href="/signup" className="hover:text-coral-600 dark:hover:text-coral-400 transition-colors">Sign Up</Link>
+              <Link href="/courses" className="px-3 py-4 rounded text-base hover:text-coral-600 dark:hover:text-coral-400 transition-colors">Courses</Link>
+              <Link href="/practice" className="px-3 py-4 rounded text-base hover:text-coral-600 dark:hover:text-coral-400 transition-colors">Practice</Link>
+              <Link href="/login" className="px-3 py-4 rounded text-base hover:text-coral-600 dark:hover:text-coral-400 transition-colors">Sign In</Link>
+              <Link href="/signup" className="px-3 py-4 rounded text-base hover:text-coral-600 dark:hover:text-coral-400 transition-colors">Sign Up</Link>
             </div>
           </div>
           <div className="mt-8 pt-6 border-t border-border dark:border-white/5 flex flex-col sm:flex-row items-center justify-between gap-3">

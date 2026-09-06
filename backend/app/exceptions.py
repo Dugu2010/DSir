@@ -4,6 +4,7 @@ Standardized exception handling for DSir backend.
 from datetime import datetime
 from typing import Any, Dict, Optional, Union
 from fastapi import HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 import structlog
@@ -217,6 +218,43 @@ async def http_exception_handler(request: Request, exc: HTTPException) -> JSONRe
     )
 
 
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Handle FastAPI validation errors and return standardized format."""
+    logger.error(
+        "validation_exception",
+        errors=exc.errors(),
+        path=request.url.path,
+        method=request.method,
+    )
+    
+    # Format the validation errors for the response
+    errors = exc.errors()
+    details = {
+        "validation_errors": [
+            {
+                "loc": err["loc"],
+                "msg": err["msg"],
+                "type": err["type"],
+            }
+            for err in errors
+        ]
+    }
+    
+    error_response = ErrorResponse(
+        error="ValidationError",
+        message="Request validation failed",
+        details=details,
+        error_code="VALIDATION_ERROR",
+        path=str(request.url.path),
+        timestamp=datetime.utcnow().isoformat() + "Z",
+    )
+    
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content=error_response.model_dump(exclude_none=True),
+    )
+
+
 async def general_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Handle unexpected exceptions."""
     logger.error(
@@ -274,6 +312,7 @@ def setup_exception_handlers(app):
     """Setup exception handlers for FastAPI app."""
     app.add_exception_handler(DSirException, dsir_exception_handler)
     app.add_exception_handler(HTTPException, http_exception_handler)
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(SQLAlchemyError, dependency_exception_handler)
     app.add_exception_handler(Exception, general_exception_handler)
     logger.info("Exception handlers configured")
