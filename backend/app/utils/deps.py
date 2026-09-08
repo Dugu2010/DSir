@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status, Request
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -11,8 +11,14 @@ from uuid import UUID
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+def _parse_user_id(value: object) -> UUID:
+    try:
+        return UUID(str(value))
+    except (ValueError, TypeError, AttributeError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
+
+
 async def get_current_user(
-    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
@@ -27,7 +33,7 @@ async def get_current_user(
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
 
-    result = await db.execute(select(User).where(User.id == UUID(user_id), User.deleted_at.is_(None)))
+    result = await db.execute(select(User).where(User.id == _parse_user_id(user_id), User.deleted_at.is_(None)))
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
@@ -55,7 +61,6 @@ require_teacher = require_role(UserRole.TEACHER, UserRole.ADMIN, UserRole.SUPERA
 
 
 async def get_optional_user(
-    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> Optional[User]:
@@ -67,5 +72,10 @@ async def get_optional_user(
     user_id = payload.get("sub")
     if not user_id:
         return None
-    result = await db.execute(select(User).where(User.id == UUID(user_id), User.deleted_at.is_(None)))
-    return result.scalar_one_or_none()
+    try:
+        parsed_id = UUID(str(user_id))
+    except (ValueError, TypeError, AttributeError):
+        return None
+    result = await db.execute(select(User).where(User.id == parsed_id, User.deleted_at.is_(None)))
+    user = result.scalar_one_or_none()
+    return user if user and user.is_active else None
