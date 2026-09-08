@@ -51,7 +51,8 @@ def _set_limits():
     import resource
 
     memory = max(64, settings.SANDBOX_MAX_MEMORY_MB) * 1024 * 1024
-    resource.setrlimit(resource.RLIMIT_CPU, (min(5, _MAX_TIMEOUT), min(5, _MAX_TIMEOUT)))
+    cpu = min(5, _MAX_TIMEOUT)
+    resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
     resource.setrlimit(resource.RLIMIT_AS, (memory, memory))
     resource.setrlimit(resource.RLIMIT_FSIZE, (10 * 1024 * 1024, 10 * 1024 * 1024))
     resource.setrlimit(resource.RLIMIT_NPROC, (20, 20))
@@ -71,9 +72,8 @@ def _extract_asserts(test_code: str) -> list[str]:
 def _safe_environment(tmp_path: str) -> dict[str, str]:
     # Never expose Render secrets, database URLs, API keys, Redis credentials,
     # or the application's normal HOME/PYTHONPATH to learner code.
-    path = os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin")
     return {
-        "PATH": path,
+        "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
         "HOME": tmp_path,
         "TMPDIR": tmp_path,
         "TEMP": tmp_path,
@@ -97,7 +97,6 @@ def _terminate_process_group(proc: subprocess.Popen) -> None:
 
 
 def _run_script(interpreter: str, script: str, timeout: int, suffix: str):
-    """Execute a script in a constrained subprocess."""
     if len(script.encode("utf-8", errors="ignore")) > _MAX_CODE_BYTES + _MAX_TEST_BYTES:
         return False, "", "Submission is too large"
 
@@ -137,14 +136,14 @@ def _run_script(interpreter: str, script: str, timeout: int, suffix: str):
 
         err = (stderr or stdout or "").strip()
         if "AssertionError" in err:
-            return False, stdout, err.splitlines()[-1] if err.splitlines() else None
+            return False, stdout, "Test failed"
         return False, stdout, err[:100_000]
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def run_tests(code: str, language: str, test_code: str, timeout: int = 10) -> dict:
-    """Run learner code against test assertions."""
+    """Run learner code against test assertions without exposing the tests."""
     language = (language or "python").lower()
     if len((code or "").encode("utf-8", errors="ignore")) > _MAX_CODE_BYTES:
         return {"passed": 0, "failed": 0, "total": 0, "details": [], "error": "Submission is too large"}
@@ -172,16 +171,16 @@ def _run_python(interpreter: str, code: str, test_code: str, timeout: int) -> di
 
     if not asserts:
         ok, output, err = _run_script(interpreter, code + "\n", timeout, ".py")
-        details.append({"test": "(code executes without error)", "passed": ok, "output": output, "error": err})
+        details.append({"test": "Execution", "passed": ok, "output": output, "error": err})
         if ok:
             passed = 1
         else:
             error = err
     else:
-        for statement in asserts:
+        for index, statement in enumerate(asserts, start=1):
             script = f"{code}\n\n{statement}\n"
             ok, output, err = _run_script(interpreter, script, timeout, ".py")
-            details.append({"test": statement, "passed": ok, "output": output, "error": err})
+            details.append({"test": f"Test {index}", "passed": ok, "output": output, "error": err})
             if ok:
                 passed += 1
             elif error is None:
@@ -194,5 +193,5 @@ def _run_python(interpreter: str, code: str, test_code: str, timeout: int) -> di
 def _run_javascript(interpreter: str, code: str, test_code: str, timeout: int) -> dict:
     script = f"{code}\n{test_code}\n"
     ok, output, err = _run_script(interpreter, script, timeout, ".js")
-    details = [{"test": "(script executes without error)", "passed": ok, "output": output, "error": err}]
+    details = [{"test": "Execution", "passed": ok, "output": output, "error": err}]
     return {"passed": 1 if ok else 0, "failed": 0 if ok else 1, "total": 1, "details": details, "error": err}
