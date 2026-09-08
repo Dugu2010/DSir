@@ -1,15 +1,16 @@
-"""Add Python foundations lesson 1.
+"""Seed Python Foundations lesson 1.
 
 Revision ID: 0005_python_lesson_1
-Revises: 0004_course_source_text
+Revises: 0004_source_text
 """
 from typing import Sequence, Union
+
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+
 
 revision: str = "0005_python_lesson_1"
-down_revision: Union[str, None] = "0004_course_source_text"
+down_revision: Union[str, None] = "0004_source_text"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -25,7 +26,7 @@ Before we learn variables, loops, functions, or classes, we need one simple ment
 
 Python is the language we will use to write those instructions.
 
-This lesson is deliberately small in vocabulary but deep in understanding. By the end, you should be able to create a Python file, run it, predict what a simple program will do, recognize the difference between source code and output, and read a basic error without panicking.
+This lesson is deliberately small in vocabulary but deep in understanding. By the end, you should be able to create a Python file, run it, predict what a simple program will do, distinguish source code from output, and read a basic error without panicking.
 
 ## Learning objectives
 
@@ -390,70 +391,109 @@ Next, we will start learning how Python represents and works with **values**—t
 
 
 def upgrade() -> None:
-    # Intentionally data-only: resolve existing course/module rows and insert one lesson.
     bind = op.get_bind()
 
+    # Create the course/module only when they do not already exist. This makes a
+    # fresh deployment self-contained while remaining safe for an existing DSir DB.
     course = bind.execute(
-        sa.text("SELECT id FROM courses WHERE slug = :slug AND deleted_at IS NULL LIMIT 1"),
+        sa.text("SELECT id FROM courses WHERE slug = :slug LIMIT 1"),
         {"slug": COURSE_SLUG},
     ).fetchone()
+
     if course is None:
-        raise RuntimeError("Cannot seed Python lesson: course with slug 'python' does not exist")
+        course = bind.execute(
+            sa.text("""
+                INSERT INTO courses (
+                    title, slug, description, difficulty, status, language,
+                    is_free, display_order, version, created_at, updated_at
+                ) VALUES (
+                    'Python', :slug,
+                    'A complete Python path from absolute beginner to advanced, project-ready development.',
+                    'beginner', 'published', 'english',
+                    true, 1, 1, now(), now()
+                )
+                RETURNING id
+            """),
+            {"slug": COURSE_SLUG},
+        ).fetchone()
+
+    course_id = course[0]
 
     module = bind.execute(
-        sa.text("SELECT id FROM modules WHERE course_id = :course_id AND slug = :slug AND deleted_at IS NULL LIMIT 1"),
-        {"course_id": course[0], "slug": MODULE_SLUG},
+        sa.text("SELECT id FROM modules WHERE course_id = :course_id AND slug = :slug LIMIT 1"),
+        {"course_id": course_id, "slug": MODULE_SLUG},
     ).fetchone()
+
     if module is None:
-        raise RuntimeError("Cannot seed Python lesson: module 'python-foundations' does not exist")
+        module = bind.execute(
+            sa.text("""
+                INSERT INTO modules (
+                    course_id, title, slug, description, display_order,
+                    lesson_count, estimated_duration_minutes, created_at, updated_at
+                ) VALUES (
+                    :course_id, 'Python Foundations', :slug,
+                    'Build a strong mental model of Python and programming before moving into values, control flow, functions, data structures, and beyond.',
+                    1, 0, 120, now(), now()
+                )
+                RETURNING id
+            """),
+            {"course_id": course_id, "slug": MODULE_SLUG},
+        ).fetchone()
+
+    module_id = module[0]
 
     existing = bind.execute(
         sa.text("SELECT id FROM lessons WHERE module_id = :module_id AND slug = :slug LIMIT 1"),
-        {"module_id": module[0], "slug": LESSON_SLUG},
+        {"module_id": module_id, "slug": LESSON_SLUG},
     ).fetchone()
-    if existing is not None:
-        return
 
-    lesson_id = bind.execute(
-        sa.text("""
-            INSERT INTO lessons (
-                module_id, title, slug, description, content, content_markdown,
-                learning_objectives, difficulty, estimated_duration_minutes,
-                display_order, skill_tags, is_free_preview, version, status,
-                published_at, created_at, updated_at
-            ) VALUES (
-                :module_id, :title, :slug, :description, :content, :content_markdown,
-                CAST(:learning_objectives AS jsonb), :difficulty, :duration,
-                :display_order, CAST(:skill_tags AS text[]), :preview, 1, 'published',
-                now(), now(), now()
-            ) RETURNING id
-        """),
-        {
-            "module_id": module[0],
-            "title": "What Is Python, and How Does a Program Run?",
-            "slug": LESSON_SLUG,
-            "description": "Build the correct mental model for programs, Python, execution, the REPL, scripts, output, and beginner-friendly error handling.",
-            "content": LESSON_MARKDOWN,
-            "content_markdown": LESSON_MARKDOWN,
-            "learning_objectives": '["Explain what a program is","Explain what Python and the Python interpreter do","Run a Python script","Use print() for simple output","Distinguish source code from output","Recognize and investigate basic errors"]',
-            "difficulty": "beginner",
-            "duration": 35,
-            "display_order": 1,
-            "skill_tags": "{python,programming-basics,execution,debugging}",
-            "preview": True,
-        },
-    ).scalar_one()
+    if existing is None:
+        bind.execute(
+            sa.text("""
+                INSERT INTO lessons (
+                    module_id, title, slug, description, content, content_markdown,
+                    learning_objectives, difficulty, estimated_duration_minutes,
+                    display_order, skill_tags, is_free_preview, version, status,
+                    created_at, updated_at, published_at
+                ) VALUES (
+                    :module_id, :title, :slug, :description, :content, :content_markdown,
+                    CAST(:learning_objectives AS text[]), 'beginner', 35,
+                    1, CAST(:skill_tags AS text[]), true, 1, 'published',
+                    now(), now(), now()
+                )
+            """),
+            {
+                "module_id": module_id,
+                "title": "What Is Python, and How Does a Program Run?",
+                "slug": LESSON_SLUG,
+                "description": "Build the correct mental model for programs, Python, execution, the REPL, scripts, output, and beginner-friendly error handling.",
+                "content": LESSON_MARKDOWN,
+                "content_markdown": LESSON_MARKDOWN,
+                "learning_objectives": '{"Explain what a program is","Explain what Python and the Python interpreter do","Distinguish source code, execution, and output","Run Python code interactively and from a .py file","Use print() to display information","Read and investigate a basic Python error"}',
+                "skill_tags": '{python,programming-basics,execution,debugging}',
+            },
+        )
 
-    # Keep the module's cached lesson count accurate if the column exists (it does in the DSir schema).
+    # Keep cached counters consistent with the actual rows.
     bind.execute(
-        sa.text("UPDATE modules SET lesson_count = (SELECT count(*) FROM lessons WHERE module_id = :module_id AND deleted_at IS NULL) WHERE id = :module_id"),
-        {"module_id": module[0]},
+        sa.text("UPDATE modules SET lesson_count = (SELECT count(*) FROM lessons WHERE module_id = :module_id) WHERE id = :module_id"),
+        {"module_id": module_id},
+    )
+    bind.execute(
+        sa.text("UPDATE courses SET lesson_count = (SELECT count(*) FROM lessons l JOIN modules m ON m.id = l.module_id WHERE m.course_id = :course_id), module_count = (SELECT count(*) FROM modules WHERE course_id = :course_id) WHERE id = :course_id"),
+        {"course_id": course_id},
     )
 
 
 def downgrade() -> None:
     bind = op.get_bind()
     bind.execute(
-        sa.text("DELETE FROM lessons WHERE slug = :slug AND module_id IN (SELECT id FROM modules WHERE slug = :module_slug)"),
+        sa.text("""
+            DELETE FROM lessons
+            WHERE slug = :slug
+              AND module_id IN (
+                  SELECT id FROM modules WHERE slug = :module_slug
+              )
+        """),
         {"slug": LESSON_SLUG, "module_slug": MODULE_SLUG},
     )
