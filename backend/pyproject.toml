@@ -32,7 +32,6 @@ dependencies = [
     "PyPDF2>=3.0,<4.0",
     "Pillow>=10.0,<12.0",
     "safety>=2.0,<3.0",
-    # Observability & Monitoring
     "opentelemetry-api>=1.20,<2.0",
     "opentelemetry-sdk>=1.20,<2.0",
     "opentelemetry-instrumentation-fastapi>=0.42b,<1.0",
@@ -41,6 +40,12 @@ dependencies = [
     "opentelemetry-exporter-prometheus>=1.20,<2.0",
     "prometheus-client>=0.19,<1.0",
 ]
+
+[tool.setuptools]
+packages = ["app"]
+
+[tool.setuptools.package-data]
+app = ["**/*.json", "**/*.yaml", "**/*.yml", "**/*.txt"]
 
 [project.optional-dependencies]
 dev = [
@@ -74,26 +79,10 @@ strict_equality = true
 
 [tool.ruff]
 select = ["E", "F", "W", "C", "N", "I"]
-ignore = [
-    "E501",  # Line length handled by Black
-    "E203",  # Whitespace before ':' handled by Black
-    "W503",  # Line break before binary operator handled by Black
-    "N806",  # Constant in function - sometimes needed for tests
-]
+ignore = ["E501", "E203", "W503", "N806"]
 line-length = 88
 target-version = "py312"
-extend-exclude = [
-    ".git",
-    "__pycache__",
-    "build",
-    "dist",
-    "*.egg-info",
-    ".venv",
-    "venv",
-    ".mypy_cache",
-    ".ruff_cache",
-    "alembic/versions/*",  # Alembic migrations
-]
+extend-exclude = [".git", "__pycache__", "build", "dist", "*.egg-info", ".venv", "venv", ".mypy_cache", ".ruff_cache", "alembic/versions/*"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -104,12 +93,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = [
-    "-v",
-    "--strict-markers",
-    "--disable-warnings",
-    "--tb=short",
-]
+addopts = ["-v", "--strict-markers", "--disable-warnings", "--tb=short"]
 asyncio_mode = "auto"
 log_cli = true
 log_cli_level = "INFO"
@@ -117,21 +101,9 @@ log_cli_level = "INFO"
 [tool.coverage.run]
 branch = true
 source = ["app"]
-omit = [
-    "*/migrations/*",
-    "*/__init__.py",
-    "*/tests/*",
-]
+omit = ["*/migrations/*", "*/__init__.py", "*/tests/*"]
 
 [tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if self?.debug",
-    "if settings.DEBUG",
-    "if settings.TESTING",
-]
+exclude_lines = ["pragma: no cover", "def __repr__", "raise AssertionError", "raise NotImplementedError", "if self?.debug", "if settings.DEBUG", "if settings.TESTING"]
 show_missing = true
 skip_covered = false
