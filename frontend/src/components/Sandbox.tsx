@@ -16,31 +16,42 @@ interface SandboxProps {
   onChange?: (code: string) => void;
 }
 
-// ── Pyodide singleton loader ──────────────────────────
+// Pyodide is loaded from the official jsDelivr distribution so the deployed
+// Vercel build does not depend on an untracked /public/pyodide directory.
+const PYODIDE_VERSION = "314.0.6";
+const PYODIDE_BASE = `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`;
+
 let pyodidePromise: Promise<any> | null = null;
+
 function loadPyodide(): Promise<any> {
   if (pyodidePromise) return pyodidePromise;
+
   pyodidePromise = (async () => {
     if (typeof window === "undefined") return null;
-    // Load pyodide via script tag to avoid webpack build-time resolution.
-    // Self-hosted under /public/pyodide so it works fully offline.
+
+    const existing = (window as any).loadPyodide;
+    if (existing) {
+      return existing({ indexURL: PYODIDE_BASE });
+    }
+
     const script = document.createElement("script");
-    script.src = "/pyodide/pyodide.js";
+    script.src = `${PYODIDE_BASE}pyodide.js`;
+    script.async = true;
     document.head.appendChild(script);
-    await new Promise((resolve, reject) => {
-      script.onload = resolve;
-      script.onerror = reject;
+
+    await new Promise<void>((resolve, reject) => {
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Pyodide CDN could not be loaded."));
     });
-    // @ts-ignore
-    const pyodide = await (window as any).loadPyodide({
-      indexURL: "/pyodide/",
-    });
-    return pyodide;
+
+    const loader = (window as any).loadPyodide;
+    if (!loader) throw new Error("Pyodide loader is missing after download.");
+    return loader({ indexURL: PYODIDE_BASE });
   })();
+
   return pyodidePromise;
 }
 
-// ── HTML template wrapper ────────────────────────────
 function wrapHTML(code: string): string {
   return `<!DOCTYPE html>
 <html>
@@ -54,6 +65,11 @@ function wrapHTML(code: string): string {
 </head>
 <body>${code}</body>
 </html>`;
+}
+
+function escapeScriptText(value: string): string {
+  // Prevent learner code from terminating the generated <script> tag.
+  return value.replace(/</g, "\\u003c");
 }
 
 export default function Sandbox({
@@ -75,96 +91,150 @@ export default function Sandbox({
   const outputRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const runIdRef = useRef(0);
 
-  // Load Pyodide on mount for Python
   useEffect(() => {
-    if (language !== "python") return;
+    if (language !== "python") {
+      setPyLoading(false);
+      return;
+    }
+
+    let cancelled = false;
     setPyLoading(true);
+    setOutput("");
+
     loadPyodide()
-      .then((p) => setPyodide(p))
-      .catch(() => setOutput("Error: Failed to load Python runtime. Check your internet connection."))
-      .finally(() => setPyLoading(false));
+      .then((p) => {
+        if (!cancelled) setPyodide(p);
+      })
+      .catch((error: any) => {
+        if (!cancelled) {
+          setOutput(`Error: Python runtime could not load. ${error?.message || "Please refresh and try again."}`);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPyLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [language]);
 
-  // Run code
+  // Capture messages from the opaque-origin JS/HTML sandbox. We never access
+  // iframe.contentDocument, which is intentionally unavailable for a secure
+  // sandbox="allow-scripts" iframe.
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      const data = event.data;
+      if (!data || data.type !== "dsir-sandbox-result") return;
+      if (data.runId !== runIdRef.current) return;
+
+      setOutput(typeof data.output === "string" ? data.output : "(no output)");
+      setIsRunning(false);
+      onRun?.(code, typeof data.output === "string" ? data.output : "");
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [code, onRun]);
+
   const runCode = useCallback(async () => {
-    if (!code.trim()) return;
+    if (!code.trim() || isRunning) return;
+
+    const runId = ++runIdRef.current;
     setIsRunning(true);
     setOutput("");
 
     try {
       if (language === "python") {
-        // ── Python via Pyodide ──
         if (!pyodide) {
-          setOutput("Python runtime not loaded yet. Please wait...");
+          setOutput("Python runtime is still loading. Please wait a moment and run again.");
           setIsRunning(false);
           return;
         }
+
         let result = "";
         pyodide.setStdout({
-          batched: (text: string) => { result += text + "\n"; },
+          batched: (text: string) => {
+            result += text + "\n";
+          },
         });
         pyodide.setStderr({
-          batched: (text: string) => { result += "[stderr] " + text + "\n"; },
+          batched: (text: string) => {
+            result += `[stderr] ${text}\n`;
+          },
         });
+
         try {
           await pyodide.runPythonAsync(code);
-        } catch (e: any) {
-          result += `Error: ${e.message || e}`;
+        } catch (error: any) {
+          result += `Error: ${error?.message || error}`;
         }
-        setOutput(result || "(no output)");
-        onRun?.(code, result);
-      } else if (language === "javascript") {
-        // ── JavaScript via sandboxed iframe ──
-        const wrapped = wrapHTML(`<script>${code}<\/script>`);
-        if (iframeRef.current) {
-          iframeRef.current.srcdoc = wrapped;
-          // Capture console.log from iframe
-          setTimeout(() => {
-            try {
-              const iframe = iframeRef.current;
-              if (!iframe?.contentWindow) return;
-              // Override console in the iframe
-              const script = iframe.contentDocument?.createElement("script");
-              if (!script) return;
-              script.textContent = `
-                window.__output__ = [];
-                const _log = console.log;
-                const _err = console.error;
-                console.log = (...args) => {
-                  _log(...args);
-                  window.__output__.push(args.map(String).join(' '));
-                };
-                console.error = (...args) => {
-                  _err(...args);
-                  window.__output__.push('[Error] ' + args.map(String).join(' '));
-                };
-              `;
-              iframe.contentDocument?.head.appendChild(script);
-            } catch {}
-          }, 100);
-          setTimeout(() => {
-            try {
-              const out = (iframeRef.current?.contentWindow as any)?.__output__;
-              setOutput(out?.length ? out.join("\n") : "(no output)");
-            } catch {
-              setOutput("(no output)");
-            }
-          }, 500);
+
+        if (runId === runIdRef.current) {
+          const finalOutput = result.trimEnd() || "(no output)";
+          setOutput(finalOutput);
+          onRun?.(code, finalOutput);
         }
-      } else if (language === "html") {
-        // ── HTML/CSS via sandboxed iframe ──
-        if (iframeRef.current) {
-          iframeRef.current.srcdoc = wrapHTML(code);
-          setOutput("Rendered in preview below.");
-        }
+        setIsRunning(false);
+        return;
       }
-    } catch (e: any) {
-      setOutput(`Error: ${e.message || e}`);
-    } finally {
+
+      if (!iframeRef.current) {
+        throw new Error("Sandbox frame is unavailable.");
+      }
+
+      if (language === "javascript") {
+        const safeCode = escapeScriptText(code);
+        iframeRef.current.srcdoc = `<!doctype html>
+<html><head><meta charset="UTF-8"></head><body>
+<script>
+(() => {
+  const runId = ${JSON.stringify(runId)};
+  const lines = [];
+  const format = (args) => args.map((value) => {
+    try {
+      if (typeof value === "string") return value;
+      return JSON.stringify(value);
+    } catch (_) {
+      return String(value);
+    }
+  }).join(" ");
+  console.log = (...args) => lines.push(format(args));
+  console.info = (...args) => lines.push(format(args));
+  console.warn = (...args) => lines.push("[Warning] " + format(args));
+  console.error = (...args) => lines.push("[Error] " + format(args));
+  window.onerror = (message, source, line, column) => {
+    lines.push("Error: " + message + " (line " + line + ")");
+    window.parent.postMessage({ type: "dsir-sandbox-result", runId, output: lines.join("\\n") }, "*");
+    return true;
+  };
+  try {
+    ${safeCode}
+  } catch (error) {
+    lines.push("Error: " + (error?.message || error));
+  }
+  window.parent.postMessage({
+    type: "dsir-sandbox-result",
+    runId,
+    output: lines.join("\\n") || "(no output)"
+  }, "*");
+})();
+</script></body></html>`;
+        return;
+      }
+
+      iframeRef.current.srcdoc = wrapHTML(code);
+      setOutput("Rendered in preview below.");
+      setIsRunning(false);
+      onRun?.(code, "Rendered in preview below.");
+    } catch (error: any) {
+      setOutput(`Error: ${error?.message || error}`);
       setIsRunning(false);
     }
-  }, [code, language, pyodide, onRun]);
+  }, [code, isRunning, language, onRun, pyodide]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Tab") {
@@ -180,7 +250,7 @@ export default function Sandbox({
         ta.selectionStart = ta.selectionEnd = start + 4;
       });
     }
-    // Ctrl/Cmd + Enter to run
+
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       runCode();
@@ -193,7 +263,6 @@ export default function Sandbox({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Determine language-specific label and placeholder
   const langLabel = { python: "🐍 Python", javascript: "📜 JavaScript", html: "🌐 HTML" };
   const placeholder = {
     python: '# Write Python code here...\nprint("Hello, DSir! 🚀")\n\nname = "Learner"\nprint(f"Welcome, {name}!")\n',
@@ -210,7 +279,6 @@ export default function Sandbox({
       )}
       style={{ height: isFullscreen ? "100vh" : height }}
     >
-      {/* Toolbar */}
       <div className="flex items-center h-11 px-3 border-b border-paper-50/10 dark:border-white/10 bg-paper-50/5 dark:bg-white/[0.03] gap-2">
         <Terminal className="h-3.5 w-3.5 text-coral-500 dark:text-coral-400" />
         <span className="text-xs font-medium font-mono text-paper-50/80 dark:text-ink">{langLabel[language]}</span>
@@ -246,26 +314,20 @@ export default function Sandbox({
           disabled={isRunning || (language === "python" && pyLoading)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-coral-500 text-night-600 hover:bg-coral-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
-          {isRunning ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Play className="h-3.5 w-3.5 fill-current" />
-          )}
+          {isRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5 fill-current" />}
           Run {language === "python" ? "(Ctrl+Enter)" : ""}
         </button>
       </div>
 
-      {/* Editor + Output split */}
       <div className="flex flex-col" style={{ height: "calc(100% - 44px)" }}>
-        {/* Code Editor */}
         <textarea
           ref={textareaRef}
           value={code}
           onChange={(e) => {
             if (readOnly) return;
-            const v = e.target.value;
-            setCode(v);
-            onChange?.(v);
+            const value = e.target.value;
+            setCode(value);
+            onChange?.(value);
           }}
           onKeyDown={handleKeyDown}
           readOnly={readOnly}
@@ -275,10 +337,8 @@ export default function Sandbox({
           placeholder={placeholder[language]}
         />
 
-        {/* Resize handle */}
         <div className="h-1 bg-paper-50/10 dark:bg-white/5 cursor-row-resize hover:bg-coral-500/60 transition-colors" />
 
-        {/* Output */}
         <div
           ref={outputRef}
           className="h-[120px] overflow-y-auto bg-night-600 border-t border-paper-50/10 dark:border-white/5 p-3 font-mono text-xs text-paper-50/80 dark:text-ink-secondary"
@@ -290,13 +350,12 @@ export default function Sandbox({
           )}
         </div>
 
-        {/* Hidden iframe for JS/HTML execution */}
         {(language === "javascript" || language === "html") && (
           <iframe
             ref={iframeRef}
             sandbox="allow-scripts"
-            className="hidden"
-            title="sandbox"
+            className={language === "html" ? "w-full h-32 border-t border-paper-50/10" : "hidden"}
+            title="DSir code sandbox"
           />
         )}
       </div>
