@@ -7,14 +7,8 @@ export async function getBrowserPython(): Promise<any> {
   pyodidePromise = (async () => {
     if (typeof window === "undefined") throw new Error("Python runtime is browser-only.");
     if (!(window as any).loadPyodide) {
-      const script = document.createElement("script");
-      script.src = `${PYODIDE_BASE}pyodide.js`;
-      script.async = true;
-      document.head.appendChild(script);
-      await new Promise<void>((resolve, reject) => {
-        script.onload = () => resolve();
-        script.onerror = () => reject(new Error("Pyodide could not be loaded from the CDN."));
-      });
+      const script = document.createElement("script"); script.src = `${PYODIDE_BASE}pyodide.js`; script.async = true; document.head.appendChild(script);
+      await new Promise<void>((resolve, reject) => { script.onload = () => resolve(); script.onerror = () => reject(new Error("Pyodide could not be loaded from the CDN.")); });
     }
     return (window as any).loadPyodide({ indexURL: PYODIDE_BASE });
   })();
@@ -30,38 +24,25 @@ export async function runPythonTests(code: string, testCode: string) {
   const pyodide = await getBrowserPython();
   const tests = assertLines(testCode);
   const details: Array<{ test: string; passed: boolean; output?: string; error?: string }> = [];
-
   let output = "";
   pyodide.setStdout({ batched: (text: string) => { output += text; } });
   pyodide.setStderr({ batched: (text: string) => { output += text; } });
 
   const run = async (assertion?: string) => {
-    const assertionCode = assertion ? `\n${assertion}` : "";
-    const wrapped = `__dsir_ns = {}\nexec(compile(${JSON.stringify(code)}, "<dsir>", "exec"), __dsir_ns)${assertionCode}\n`;
+    const assertionExec = assertion ? `\nexec(compile(${JSON.stringify(assertion)}, "<dsir-test>", "exec"), __dsir_ns)` : "";
+    const wrapped = `__dsir_ns = {}\nexec(compile(${JSON.stringify(code)}, "<dsir>", "exec"), __dsir_ns)${assertionExec}\n`;
     await pyodide.runPythonAsync(wrapped);
   };
 
   if (!tests.length) {
-    try {
-      await run();
-      details.push({ test: "Execution", passed: true, output: output || "(no output)" });
-    } catch (error: any) {
-      details.push({ test: "Execution", passed: false, output, error: String(error?.message || error) });
-    }
+    try { await run(); details.push({ test: "Execution", passed: true, output: output || "(no output)" }); }
+    catch (error: any) { details.push({ test: "Execution", passed: false, output, error: String(error?.message || error) }); }
   } else {
     for (let i = 0; i < tests.length; i++) {
-      try {
-        output = "";
-        await run(tests[i]);
-        details.push({ test: `Test ${i + 1}`, passed: true, output: output || "(no output)" });
-      } catch (error: any) {
-        details.push({ test: `Test ${i + 1}`, passed: false, output, error: String(error?.message || error) });
-      }
+      try { output = ""; await run(tests[i]); details.push({ test: `Test ${i + 1}`, passed: true, output: output || "(no output)" }); }
+      catch (error: any) { details.push({ test: `Test ${i + 1}`, passed: false, output, error: String(error?.message || error) }); }
     }
   }
-
   const passed = details.filter((item) => item.passed).length;
-  const failed = details.length - passed;
-  const firstError = details.find((item) => !item.passed)?.error;
-  return { passed, failed, total: details.length, details, error: firstError || null };
+  return { passed, failed: details.length - passed, total: details.length, details, error: details.find((item) => !item.passed)?.error || null };
 }
