@@ -1,7 +1,7 @@
 import asyncio
 from logging.config import fileConfig
 from sqlalchemy import pool
-from sqlalchemy.engine import Connection
+from sqlalchemy.engine import Connection, make_url
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
 
@@ -39,10 +39,24 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
+    # asyncpg versions without channel_binding support reject Neon's
+    # channel_binding query parameter before a connection is even attempted.
+    # Remove it here; TLS is enabled explicitly for the production database.
+    db_url = make_url(settings.DATABASE_URL)
+    connect_args = {}
+
+    if db_url.drivername == "postgresql+asyncpg":
+        query = dict(db_url.query)
+        query.pop("channel_binding", None)
+        db_url = db_url.set(query=query)
+        if settings.ENVIRONMENT.lower() == "production":
+            connect_args["ssl"] = "require"
+
     connectable = async_engine_from_config(
-        config.get_section(config.config_ini_section, {}),
+        {"sqlalchemy.url": str(db_url)},
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
+        connect_args=connect_args,
     )
     async with connectable.connect() as connection:
         await connection.run_sync(do_run_migrations)
