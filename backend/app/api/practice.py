@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+import asyncio
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.database import get_db
@@ -11,6 +13,8 @@ from uuid import UUID
 from datetime import date
 
 router = APIRouter(prefix="/practice", tags=["Practice"])
+# Keep concurrent child-process graders bounded on small Render instances.
+_GRADING_SLOTS = asyncio.Semaphore(2)
 
 @router.get("/exercises", response_model=PaginatedResponse)
 async def list_exercises(page: int = Query(1, ge=1), size: int = Query(20, ge=1, le=100), difficulty: str = None, exercise_type: str = None, skill: str = None, current_user: User = Depends(get_current_active_user), db: AsyncSession = Depends(get_db)):
@@ -48,9 +52,9 @@ async def get_exercise(exercise_id: UUID, current_user: User = Depends(get_curre
 async def submit_solution(exercise_id: UUID, data: dict, current_user: User = Depends(get_current_active_user), db: AsyncSession = Depends(get_db)):
     """Authoritative server-side grading.
 
-    Learner code is executed only by the hardened child-process sandbox in
-    code_runner. The API process itself never evals/execs submitted code.
-    Client-reported browser results are intentionally ignored for the score.
+    Submitted code is executed only inside the hardened child-process sandbox.
+    The FastAPI request process never evaluates learner code. Client-reported
+    browser results are ignored for the score.
     """
     result = await db.execute(select(Exercise).where(Exercise.id == exercise_id))
     exercise = result.scalar_one_or_none()
@@ -64,8 +68,9 @@ async def submit_solution(exercise_id: UUID, data: dict, current_user: User = De
     if str(language).lower() != "python":
         raise HTTPException(status_code=422, detail="Python exercises only")
 
-    # Never trust client_result: the authoritative score comes from this run.
-    grading = await __import__("asyncio").to_thread(code_runner.run_tests, code, exercise.test_code or "")
+    async with _GRADING_SLOTS:
+        grading = await asyncio.to_thread(code_runner.run_tests, code, exercise.test_code or "")
+
     total = int(grading.get("total", 0) or 0)
     passed = int(grading.get("passed", 0) or 0)
     failed = int(grading.get("failed", max(total - passed, 0)) or 0)
