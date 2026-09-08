@@ -868,9 +868,9 @@ class QuizAttempt(Base):
     total_questions = Column(Integer, nullable=False, default=0)
     passed = Column(Boolean, nullable=False, default=False)
     answers = Column(JSON, nullable=True)
-completed_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
-created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
-__table_args__ = (Index('ix_quizattempt_user_id_completed_at', user_id, completed_at),)
+    completed_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    __table_args__ = (Index('ix_quizattempt_user_id_completed_at', user_id, completed_at),)
 
 
 # ── Course Reviews ──────────────────────────────────────────────
