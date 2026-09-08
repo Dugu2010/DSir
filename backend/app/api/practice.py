@@ -19,6 +19,7 @@ from app.models import User
 from uuid import UUID
 from datetime import datetime, timezone, date
 from app.utils.redis import get_cache, set_cache
+import asyncio
 
 router = APIRouter(prefix="/practice", tags=["Practice"])
 
@@ -99,9 +100,6 @@ async def get_exercise(
     )
     hints = [{"level": h.hint_level, "content": h.content, "cost_percentage": h.cost_percentage} for h in hints_result.scalars().all()]
 
-    # Build from the base model (ExerciseResponse) so the ORM's `hints`
-    # (list[str]) never collides with the detail schema's `hints` (list[dict]),
-    # then attach the structured hints + test count explicitly.
     resp = ExerciseDetailResponse(
         **ExerciseResponse.model_validate(exercise).model_dump(),
         hints=hints,
@@ -125,7 +123,6 @@ async def submit_solution(
     if not exercise:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Exercise not found")
 
-    # Count previous attempts
     attempt_count_result = await db.execute(
         select(func.count(Submission.id)).where(
             Submission.user_id == current_user.id,
@@ -142,8 +139,10 @@ async def submit_solution(
         attempt_number=attempt_number,
     )
 
-    # Real execution: run the submitted code against the exercise's tests.
-    result = code_runner.run_tests(
+    # subprocess execution is blocking; never run it directly on FastAPI's
+    # event loop because one long submission would stall unrelated requests.
+    result = await asyncio.to_thread(
+        code_runner.run_tests,
         code=data.code,
         language=data.language,
         test_code=exercise.test_code or "",
@@ -161,7 +160,6 @@ async def submit_solution(
     db.add(submission)
     await db.flush()
 
-    # Gamification: XP + streak + daily goal + achievements on pass.
     if submission.status == SubmissionStatus.PASSED:
         await gamification.add_xp(db, current_user, exercise.points)
         stats = await gamification.record_activity(
@@ -232,7 +230,6 @@ async def list_projects(
         query = query.where(Project.is_capstone == is_capstone)
 
     count_query = select(func.count(Project.id)).select_from(Project)
-
     total = (await db.execute(count_query)).scalar()
     result = await db.execute(
         query.order_by(Project.created_at.desc())
@@ -258,8 +255,6 @@ async def list_projects(
     )
 
 
-# ── Project Submissions (user history) — MUST be before {project_id} routes ──
-
 @router.get("/projects/submissions", response_model=PaginatedResponse)
 async def get_project_submissions(
     page: int = Query(default=1, ge=1),
@@ -267,9 +262,7 @@ async def get_project_submissions(
     current_user: User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db),
 ):
-    count_query = select(func.count(ProjectSubmission.id)).where(
-        ProjectSubmission.user_id == current_user.id
-    )
+    count_query = select(func.count(ProjectSubmission.id)).where(ProjectSubmission.user_id == current_user.id)
     total = (await db.execute(count_query)).scalar()
 
     result = await db.execute(
@@ -290,8 +283,6 @@ async def get_project_submissions(
     )
 
 
-# ── Project Detail ──────────────────────────────────────────────
-
 @router.get("/projects/{project_id}", response_model=ProjectDetailResponse)
 async def get_project(
     project_id: UUID,
@@ -302,11 +293,8 @@ async def get_project(
     project = result.scalar_one_or_none()
     if not project:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Project not found")
-
     return project
 
-
-# ── Project Submission ──────────────────────────────────────────
 
 @router.post("/projects/{project_id}/submit", response_model=ProjectSubmissionResponse, status_code=status.HTTP_201_CREATED)
 async def submit_project(
@@ -328,7 +316,6 @@ async def submit_project(
     )
     db.add(submission)
 
-    # Update user stats
     stats_result = await db.execute(select(UserStats).where(UserStats.user_id == current_user.id))
     stats = stats_result.scalar_one_or_none()
     if stats:
@@ -337,5 +324,4 @@ async def submit_project(
 
     await db.flush()
     await db.commit()
-
     return submission
