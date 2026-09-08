@@ -6,9 +6,9 @@ from app.models import Exercise, ExerciseHint, Submission, SubmissionStatus, Exe
 from app.schemas import ExerciseResponse, ExerciseDetailResponse, SubmissionResponse, PaginatedResponse, ProjectDetailResponse, ProjectSubmitRequest, ProjectSubmissionResponse
 from app.utils.deps import get_current_active_user
 from app.services import gamification
+from app.services import code_runner
 from uuid import UUID
 from datetime import date
-from app.utils.redis import get_cache, set_cache
 
 router = APIRouter(prefix="/practice", tags=["Practice"])
 
@@ -41,36 +41,57 @@ async def get_exercise(exercise_id: UUID, current_user: User = Depends(get_curre
     hints_result = await db.execute(select(ExerciseHint).where(ExerciseHint.exercise_id == exercise_id).order_by(ExerciseHint.hint_level))
     hints = [{"level": h.hint_level, "content": h.content, "cost_percentage": h.cost_percentage} for h in hints_result.scalars().all()]
     payload = ExerciseDetailResponse(**ExerciseResponse.model_validate(exercise).model_dump(), hints=hints, test_count=len(exercise.test_code.splitlines()) if exercise.test_code else 0).model_dump()
-    # The browser needs the tests because execution/grading is intentionally local.
     payload["test_code"] = exercise.test_code or ""
     return payload
 
 @router.post("/exercises/{exercise_id}/submit", response_model=SubmissionResponse)
 async def submit_solution(exercise_id: UUID, data: dict, current_user: User = Depends(get_current_active_user), db: AsyncSession = Depends(get_db)):
+    """Authoritative server-side grading.
+
+    Learner code is executed only by the hardened child-process sandbox in
+    code_runner. The API process itself never evals/execs submitted code.
+    Client-reported browser results are intentionally ignored for the score.
+    """
     result = await db.execute(select(Exercise).where(Exercise.id == exercise_id))
     exercise = result.scalar_one_or_none()
-    if not exercise: raise HTTPException(status_code=404, detail="Exercise not found")
-    code = data.get("code"); language = data.get("language", "python"); client_result = data.get("client_result")
-    if not isinstance(code, str) or len(code) > 512_000: raise HTTPException(status_code=422, detail="Invalid code")
-    if language.lower() != "python": raise HTTPException(status_code=422, detail="Python exercises only")
-    if not isinstance(client_result, dict): raise HTTPException(status_code=422, detail="Browser test result is required")
-    try: total = int(client_result.get("total", 0)); passed = int(client_result.get("passed", 0))
-    except (TypeError, ValueError): raise HTTPException(status_code=422, detail="Invalid browser test result")
-    if total < 1 or total > 100 or passed < 0 or passed > total: raise HTTPException(status_code=422, detail="Invalid browser test result")
-    details = client_result.get("details", [])
-    if not isinstance(details, list) or len(details) > 100: raise HTTPException(status_code=422, detail="Invalid test details")
-    score = round(passed / total * 100, 1)
+    if not exercise:
+        raise HTTPException(status_code=404, detail="Exercise not found")
+
+    code = data.get("code") if isinstance(data, dict) else None
+    language = data.get("language", "python") if isinstance(data, dict) else "python"
+    if not isinstance(code, str) or not code.strip() or len(code.encode("utf-8")) > 64 * 1024:
+        raise HTTPException(status_code=422, detail="Invalid code or code exceeds the 64 KB limit")
+    if str(language).lower() != "python":
+        raise HTTPException(status_code=422, detail="Python exercises only")
+
+    # Never trust client_result: the authoritative score comes from this run.
+    grading = await __import__("asyncio").to_thread(code_runner.run_tests, code, exercise.test_code or "")
+    total = int(grading.get("total", 0) or 0)
+    passed = int(grading.get("passed", 0) or 0)
+    failed = int(grading.get("failed", max(total - passed, 0)) or 0)
+    score = round(passed / total * 100, 1) if total else 0.0
+
     attempts = (await db.execute(select(func.count(Submission.id)).where(Submission.user_id == current_user.id, Submission.exercise_id == exercise_id))).scalar() or 0
-    submission = Submission(user_id=current_user.id, exercise_id=exercise_id, code=code, language=language, attempt_number=attempts + 1)
+    submission = Submission(user_id=current_user.id, exercise_id=exercise_id, code=code, language="python", attempt_number=attempts + 1)
     submission.status = SubmissionStatus.PASSED if score >= 80 else SubmissionStatus.FAILED
     submission.score = score
-    submission.test_results = {"verification_mode": "browser", "passed": passed, "failed": total - passed, "total": total, "details": details}
-    submission.error_message = str(client_result.get("error"))[:2000] if client_result.get("error") else None
-    db.add(submission); await db.flush()
+    submission.test_results = {
+        "verification_mode": "server_sandbox",
+        "passed": passed,
+        "failed": failed,
+        "total": total,
+        "details": grading.get("details", [])[:100],
+    }
+    submission.error_message = str(grading.get("error"))[:2000] if grading.get("error") else None
+    db.add(submission)
+    await db.flush()
     if submission.status == SubmissionStatus.PASSED:
         await gamification.add_xp(db, current_user, exercise.points)
-        stats = await gamification.record_activity(db, current_user, exercises=1, minutes=exercise.estimated_duration_minutes or 5); stats.exercises_completed += 1
-    else: await gamification.record_activity(db, current_user)
+        stats = await gamification.record_activity(db, current_user, exercises=1, minutes=exercise.estimated_duration_minutes or 5)
+        stats.exercises_completed += 1
+    else:
+        await gamification.record_activity(db, current_user)
+    await db.commit()
     return submission
 
 @router.get("/submissions", response_model=PaginatedResponse)
