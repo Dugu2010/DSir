@@ -1,13 +1,12 @@
-import asyncio
 from logging.config import fileConfig
-from sqlalchemy import pool
-from sqlalchemy.engine import Connection, make_url
-from sqlalchemy.ext.asyncio import async_engine_from_config
-from alembic import context
 
-from app.database import Base
-from app.models import *  # noqa: F401, F403 — import all models
+from alembic import context
+from sqlalchemy import engine_from_config, pool
+from sqlalchemy.engine import make_url
+
 from app.config import get_settings
+from app.database import Base
+from app.models import *  # noqa: F401,F403 — import all models
 
 config = context.config
 settings = get_settings()
@@ -15,56 +14,57 @@ settings = get_settings()
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
-
 target_metadata = Base.metadata
 
 
+def _migration_url():
+    """Build a synchronous psycopg URL for Alembic.
+
+    The application uses psycopg for PostgreSQL. Keeping Alembic on the same
+    driver avoids asyncpg rejecting Neon connection parameters such as
+    channel_binding before a connection is established.
+    """
+    db_url = make_url(settings.DATABASE_URL)
+
+    if db_url.drivername in {"postgresql+asyncpg", "postgresql"}:
+        query = dict(db_url.query)
+        query.pop("channel_binding", None)
+        if settings.ENVIRONMENT.lower() == "production":
+            query.setdefault("sslmode", "require")
+        db_url = db_url.set(drivername="postgresql+psycopg", query=query)
+
+    return str(db_url)
+
+
 def run_migrations_offline() -> None:
-    url = config.get_main_option("sqlalchemy.url")
+    url = _migration_url()
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
+
     with context.begin_transaction():
         context.run_migrations()
-
-
-def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata)
-    with context.begin_transaction():
-        context.run_migrations()
-
-
-async def run_async_migrations() -> None:
-    # asyncpg versions without channel_binding support reject Neon's
-    # channel_binding query parameter before a connection is even attempted.
-    # Remove it here; TLS is enabled explicitly for the production database.
-    db_url = make_url(settings.DATABASE_URL)
-    connect_args = {}
-
-    if db_url.drivername == "postgresql+asyncpg":
-        query = dict(db_url.query)
-        query.pop("channel_binding", None)
-        db_url = db_url.set(query=query)
-        if settings.ENVIRONMENT.lower() == "production":
-            connect_args["ssl"] = "require"
-
-    connectable = async_engine_from_config(
-        {"sqlalchemy.url": str(db_url)},
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-        connect_args=connect_args,
-    )
-    async with connectable.connect() as connection:
-        await connection.run_sync(do_run_migrations)
-    await connectable.dispose()
 
 
 def run_migrations_online() -> None:
-    asyncio.run(run_async_migrations())
+    configuration = config.get_section(config.config_ini_section, {})
+    configuration["sqlalchemy.url"] = _migration_url()
+
+    connectable = engine_from_config(
+        configuration,
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    with connectable.connect() as connection:
+        context.configure(connection=connection, target_metadata=target_metadata)
+        with context.begin_transaction():
+            context.run_migrations()
+
+    connectable.dispose()
 
 
 if context.is_offline_mode():
