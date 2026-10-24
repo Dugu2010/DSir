@@ -13,3 +13,5 @@ __pycache__/
 *.tsbuildinfo
 session-ses_*.md
 frontend/public/pyodide/
+.ideavo/project
+*.log
