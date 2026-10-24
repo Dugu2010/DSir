@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Allow the sandbox preview/tunnel hostnames to hit the dev server
+  allowedDevOrigins: ["*.e2b.app"],
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**" },

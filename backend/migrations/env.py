@@ -33,7 +33,9 @@ def _migration_url():
             query.setdefault("sslmode", "require")
         db_url = db_url.set(drivername="postgresql+psycopg", query=query)
 
-    return str(db_url)
+    # str(URL) masks the password as '***' (SQLAlchemy 2.x), which would break
+    # authentication; render with the password kept intact.
+    return db_url.render_as_string(hide_password=False)
 
 
 def run_migrations_offline() -> None:

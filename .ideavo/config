@@ -1,0 +1,96 @@
+{
+  "systemSetup": [
+    {
+      "name": "Install uv",
+      "command": "curl -LsSf https://astral.sh/uv/install.sh | sh"
+    },
+    {
+      "name": "Install Python 3.12",
+      "command": "export PATH=\"$HOME/.local/bin:$PATH\" && uv python install 3.12"
+    }
+  ],
+  "templateName": "custom",
+  "projectDependencies": [
+    {
+      "name": "Create Python venv",
+      "command": "cd backend && export PATH=\"$HOME/.local/bin:$PATH\" && uv venv --python 3.12 --allow-existing"
+    },
+    {
+      "name": "Install backend deps",
+      "command": "cd backend && export PATH=\"$HOME/.local/bin:$PATH\" && uv pip install -r requirements.txt"
+    },
+    {
+      "name": "Install frontend deps",
+      "command": "cd frontend && npm ci"
+    }
+  ],
+  "codeChecks": [
+    {
+      "name": "Compile backend",
+      "command": "cd backend && .venv/bin/python -m compileall -q app"
+    },
+    {
+      "name": "Lint frontend",
+      "command": "cd frontend && npm run lint"
+    },
+    {
+      "name": "Typecheck frontend",
+      "command": "cd frontend && npm run typecheck"
+    }
+  ],
+  "buildSteps": [
+    {
+      "name": "Run migrations",
+      "command": "cd backend && .venv/bin/alembic upgrade head"
+    },
+    {
+      "name": "Seed database",
+      "command": "cd backend && .venv/bin/python -m app.seed"
+    },
+    {
+      "name": "Build frontend",
+      "command": "cd frontend && npm run build"
+    }
+  ],
+  "runStep": [
+    {
+      "name": "Run API server",
+      "command": "cd backend && .venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000",
+      "port": "8000"
+    },
+    {
+      "name": "Run dev server",
+      "command": "cd frontend && npm run dev -- --port 4000 -H 0.0.0.0",
+      "port": "4000"
+    }
+  ],
+  "deploySteps": [],
+  "cleanupFiles": [
+    "backend/.venv",
+    "backend/app/__pycache__",
+    "backend/app/api/__pycache__",
+    "backend/app/middleware/__pycache__",
+    "backend/app/models/__pycache__",
+    "backend/app/schemas/__pycache__",
+    "backend/app/services/__pycache__",
+    "backend/app/tasks/__pycache__",
+    "backend/app/utils/__pycache__",
+    "backend/migrations/__pycache__",
+    "backend/migrations/versions/__pycache__",
+    "backend/tests/__pycache__",
+    "backend/uploads",
+    "frontend/node_modules",
+    "frontend/.next"
+  ],
+  "packageManager": "npm",
+  "envPaths": [
+    {
+      "name": "backend",
+      "path": "backend/.env"
+    },
+    {
+      "name": "frontend",
+      "path": "frontend/.env.local"
+    }
+  ]
+}
