@@ -15,3 +15,8 @@ session-ses_*.md
 frontend/public/pyodide/
 .ideavo/project
 *.log
+.pgdata/
+.pgdata-uri
+*.pid
+.tmp/
+.playwright/
