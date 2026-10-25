@@ -181,7 +181,7 @@ export default function LandingPage() {
           <div className="flex sm:hidden items-center gap-1">
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary"
+              className="p-2.5 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary"
               title={resolvedTheme === "dark" ? "Light mode" : "Dark mode"}
               aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >

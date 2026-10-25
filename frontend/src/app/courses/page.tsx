@@ -169,6 +169,18 @@ export default function CoursesPage() {
         )}
       </div>
 
+      {/* Mobile-first tag pills */}
+      {allTags.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-4">
+          <TagPill active={!selectedTag} onClick={() => setSelectedTag("")}>All</TagPill>
+          {allTags.slice(0, 12).map(tag => (
+            <TagPill key={tag} active={selectedTag === tag} onClick={() => setSelectedTag(selectedTag === tag ? "" : tag)}>
+              {tag}
+            </TagPill>
+          ))}
+        </div>
+      )}
+
       {/* Error */}
       {error && (
         <div className="rounded-2xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/5 p-6 flex items-center gap-4">

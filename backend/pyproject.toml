@@ -93,6 +93,7 @@ ignore = ["E501", "E203", "N806"]
 quote-style = "double"
 
 [tool.pytest.ini_options]
+markers = ["asyncio"]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]

@@ -46,12 +46,36 @@
     font-feature-settings: "rlig" 1, "calt" 1;
     background-color: rgb(var(--surface-secondary));
     color: rgb(var(--ink));
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  }
+
+  html {
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
   }
 
   /* Accessible, theme-aware focus indicator */
   :focus-visible {
     outline: 2px solid rgb(var(--coral-focus, 255 92 57));
     outline-offset: 2px;
+    background: none;
+  }
+
+  /* Ensure focus rings don't create hotspots on interactive cards */
+  .focus-visible-ring:focus-visible {
+    outline: 2px solid rgb(var(--coral-focus, 255 92 57));
+    outline-offset: 2px;
+  }
+
+  /* Improve tap target accessibility - outline for elements without focusable intent */
+  button:focus-visible,
+  [role="button"]:focus-visible {
+    outline: 2px solid rgb(var(--coral-focus, 255 92 57));
+    outline-offset: 2px;
+    background: rgba(255 92 57 / 0.1);
   }
 
   /* Select styling — theme aware */
@@ -150,4 +174,20 @@
 
 @layer utilities {
   .text-balance { text-wrap: balance; }
+
+  /* Responsive utility classes */
+  .prevent-horizontal-scroll {
+    overflow-x: hidden;
+    display: block; /* prevent inline-block scroll issues */
+  }
+
+  /* Focus-visible utility for custom focus rings */
+  .focus-visible-custom {
+    @apply focus-visible:outline-2 focus-visible:outline-coral-400 focus-visible:outline-offset-2;
+  }
+
+  /* High contrast text utility */
+  .text-contrast-primary {
+    @apply text-ink dark:text-ink-inverse;
+  }
 }

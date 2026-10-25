@@ -147,7 +147,7 @@ export default function LessonPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] -m-4 lg:-m-8">
+    <div className="flex min-h-[32rem] overflow-hidden">
       {/* Lesson Content Drawer */}
       {(drawer === 'desktop' || drawer === 'mobile') && (
         <>

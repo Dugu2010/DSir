@@ -101,7 +101,7 @@ export function CodeBlock({
         </div>
 
         {/* Code display */}
-        <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
+        <div className="overflow-x-auto overflow-y-auto">
           <pre className="text-sm leading-relaxed font-mono p-4" style={{ fontFamily: "var(--font-mono), 'JetBrains Mono', 'Fira Code', monospace" }}>
             <code>
               {lines.map((line, i) => (

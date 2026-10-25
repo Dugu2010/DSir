@@ -189,7 +189,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
             <button
               onClick={() => setSidebarOpen(false)}
-              className="lg:hidden p-1.5 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-tertiary"
+              className="lg:hidden p-2.5 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-tertiary"
               aria-label="Close navigation"
             >
               <X className="h-5 w-5" />
@@ -269,7 +269,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
                 <button
                   onClick={handleLogout}
-                  className="p-1.5 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-tertiary hover:text-red-500 transition-colors"
+                  className="p-2.5 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-tertiary hover:text-red-500 transition-colors"
                   title="Sign out"
                   aria-label="Sign out"
                 >
@@ -287,7 +287,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="sticky top-0 z-30 h-16 bg-surface/85 dark:bg-night-500/85 backdrop-blur-xl border-b border-border dark:border-white/5 flex items-center justify-between px-4 lg:px-8 gap-4">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="lg:hidden p-2 -ml-2 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink dark:text-ink"
+            className="lg:hidden p-2.5 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink dark:text-ink"
             aria-label="Open navigation"
           >
             <Menu className="h-5 w-5" />
@@ -299,7 +299,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {/* Theme toggle */}
             <button
               onClick={toggleTheme}
-              className="p-2 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary dark:text-ink-tertiary transition-colors"
+              className="p-2.5 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary dark:text-ink-tertiary transition-colors"
               title={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
               aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
@@ -312,7 +312,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
             <Link
               href="/notifications"
-              className="relative p-2 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary dark:text-ink-tertiary transition-colors"
+              className="relative p-2.5 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary dark:text-ink-tertiary transition-colors"
               aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications"}
             >
               <Bell className="h-4.5 w-4.5" aria-hidden="true" />
@@ -324,7 +324,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
             <Link
               href="/profile"
-              className="p-2 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary dark:text-ink-tertiary transition-colors"
+              className="p-2.5 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary dark:text-ink-tertiary transition-colors"
               aria-label="Your profile"
             >
               <User className="h-4.5 w-4.5" aria-hidden="true" />
