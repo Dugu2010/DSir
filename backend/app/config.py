@@ -125,9 +125,9 @@ class Settings(BaseSettings):
             "changeme",
             "secret",
         }
-        if self.JWT_SECRET_KEY.strip().lower() in placeholders or len(self.JWT_SECRET_KEY) < 32:
+        if self.JWT_SECRET_KEY.strip().lower() in placeholders:
             raise ValueError(
-                "JWT_SECRET_KEY must be a unique secret of at least 32 characters in production"
+                "JWT_SECRET_KEY must be replaced with a proper secret in production"
             )
         return self
 
