@@ -62,7 +62,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         now = datetime.now(timezone.utc)
         window_seconds = settings.RATE_LIMIT_GLOBAL_WINDOW
         limit = settings.RATE_LIMIT_GLOBAL
-        if path.startswith("/api/v1/auth"):
+        # `/auth/me` is a cheap session probe called on every app load. Apply
+        # the stricter credential limit only to authentication mutations;
+        # otherwise a normal user refreshing the app can lock themselves out.
+        if path.startswith("/api/v1/auth") and path != "/api/v1/auth/me":
             window_seconds = settings.RATE_LIMIT_AUTH_WINDOW
             limit = settings.RATE_LIMIT_AUTH
 

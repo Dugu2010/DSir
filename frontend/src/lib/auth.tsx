@@ -35,21 +35,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const token = localStorage.getItem("access_token");
       if (!token) {
         setUser(null);
+        localStorage.removeItem("dsir_user");
         setIsLoading(false);
         return;
       }
       const userData = await authApi.me();
       setUser(userData);
-    } catch {
-      setUser(null);
-      localStorage.removeItem("access_token");
-      localStorage.removeItem("refresh_token");
+      localStorage.setItem("dsir_user", JSON.stringify(userData));
+    } catch (error: any) {
+      // Only an authentication failure invalidates the session. A transient
+      // 429/5xx/network error must not sign the learner out or wipe tokens.
+      if (error?.status === 401) {
+        setUser(null);
+        localStorage.removeItem("access_token");
+        localStorage.removeItem("refresh_token");
+        localStorage.removeItem("dsir_user");
+      }
     } finally {
       setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
+    // Show the last known profile while the session probe runs. This avoids a
+    // flash of logged-out UI during a slow or briefly failing `/auth/me`.
+    try {
+      const cached = localStorage.getItem("dsir_user");
+      if (cached && localStorage.getItem("access_token")) {
+        setUser(JSON.parse(cached) as User);
+      }
+    } catch {
+      localStorage.removeItem("dsir_user");
+    }
     refreshUser();
   }, [refreshUser]);
 
@@ -57,6 +74,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const data = await authApi.login({ email, password });
     localStorage.setItem("access_token", data.access_token);
     localStorage.setItem("refresh_token", data.refresh_token);
+    localStorage.removeItem("dsir_user");
     await refreshUser();
     router.push("/dashboard");
   };
@@ -65,6 +83,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const data = await authApi.signup(signupData);
     localStorage.setItem("access_token", data.access_token);
     localStorage.setItem("refresh_token", data.refresh_token);
+    localStorage.removeItem("dsir_user");
     await refreshUser();
     router.push("/dashboard");
   };
@@ -77,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
+    localStorage.removeItem("dsir_user");
     setUser(null);
     // No explicit navigation here: AppShell's client-side guard observes the
     // now-unauthenticated session and sends protected pages to

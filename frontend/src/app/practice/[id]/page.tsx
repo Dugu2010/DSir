@@ -14,7 +14,7 @@ import toast from "react-hot-toast";
 
 export default function ExercisePage() {
   const params = useParams<{ id: string }>(); const router = useRouter();
-  const [code, setCode] = useState(""); const [showHints, setShowHints] = useState<number[]>([]); const [result, setResult] = useState<any>(null); const [freePractice, setFreePractice] = useState(false);
+  const [code, setCode] = useState(""); const [showHints, setShowHints] = useState<number[]>([]); const [result, setResult] = useState<any>(null); const [freePractice, setFreePractice] = useState(false); const [solution, setSolution] = useState<string | null>(null);
   const { data: exercise, isLoading, error, refetch } = useQuery({ queryKey: ["exercise", params.id], queryFn: () => api.get<any>(`/practice/exercises/${params.id}`), enabled: !!params.id, retry: 1 });
   const submitMutation = useMutation({
     mutationFn: async () => {
@@ -24,6 +24,14 @@ export default function ExercisePage() {
     onSuccess: (data) => { setResult(data); data.status === "passed" ? toast.success(`Passed! ${data.score}% 🎉`) : toast.error(`Failed — ${data.score}%. Check the explanation below.`); },
     onError: (e: any) => toast.error(e?.message || "Could not submit. Please try again.")
   });
+  const revealSolution = async () => {
+    try {
+      const data = await api.get<{ solution_code: string }>(`/practice/exercises/${params.id}/solution`);
+      setSolution(data.solution_code);
+    } catch (e: any) {
+      toast.error(e?.message || "Submit an attempt before revealing the solution.");
+    }
+  };
   useEffect(() => { if (exercise?.starter_code) setCode(exercise.starter_code); }, [exercise]);
   if (isLoading) return <PageLoader label="Loading exercise..." />;
   if (error || !exercise) return <ErrorState title="Couldn't load this exercise" description="Check your connection and try again." onRetry={() => refetch()} className="min-h-[60vh]" />;
@@ -43,9 +51,9 @@ export default function ExercisePage() {
       </div>
     </div>
     <div className="flex-1 flex flex-col bg-night-600">
-      <div className="h-14 border-b border-paper-50/10 flex items-center px-4 gap-3 shrink-0"><Code2 className="h-4 w-4 text-coral-500" /><span className="text-sm font-medium text-paper-50/80 dark:text-ink">{freePractice ? "Free Python Practice" : "Python Editor"}</span><div className="flex-1" /><Button size="sm" variant={freePractice ? "secondary" : "outline"} onClick={() => { setFreePractice(!freePractice); setResult(null); }} leftIcon={<Sparkles className="h-3.5 w-3.5" />}>{freePractice ? "Back to Exercise" : "Free Practice"}</Button>{!freePractice && <Button size="sm" onClick={() => submitMutation.mutate()} loading={submitMutation.isPending} leftIcon={!submitMutation.isPending ? <Send className="h-3.5 w-3.5" /> : undefined}>Submit Solution</Button>}</div>
-      <div className="flex-1 min-h-0"><Sandbox key={freePractice ? "free" : "exercise"} language="python" initialCode={freePractice ? "# Try anything here!\nprint(\"Hello, DSir! 🚀\")\n" : (exercise.starter_code || "# Write your solution here\n")} height="100%" onChange={setCode} /></div>
-      {result && !freePractice && <div role="status" aria-live="polite" className={cn("shrink-0 border-t px-4 py-3 overflow-y-auto max-h-56", result.status === "passed" ? "border-emerald-500/30 bg-emerald-500/10" : "border-red-500/30 bg-red-500/10")}><div className="flex items-center gap-2 mb-2">{result.status === "passed" ? <CheckCircle className="h-5 w-5 text-emerald-400" /> : <XCircle className="h-5 w-5 text-red-400" />}<span className="text-sm font-semibold text-paper-50">{result.status === "passed" ? `Passed — ${result.score}%` : `Failed — ${result.score}%`}</span></div>{result.error_message && <pre className="text-xs text-red-300 whitespace-pre-wrap mb-2">{result.error_message}</pre>}{result.test_results?.details?.map((test: any, i: number) => <div key={i} className="mb-2 text-xs"><div className={test.passed ? "text-emerald-300" : "text-red-300"}>{test.passed ? "✅" : "❌"} {test.test}</div>{!test.passed && test.error && <pre className="mt-1 text-red-300/80 whitespace-pre-wrap pl-5">{test.error}</pre>}</div>)}</div>}
+      <div className="h-14 border-b border-paper-50/10 flex items-center px-3 sm:px-4 gap-2 sm:gap-3 shrink-0"><Code2 className="h-4 w-4 text-coral-500 shrink-0" /><span className="text-xs sm:text-sm font-medium text-paper-50/80 dark:text-ink truncate">{freePractice ? "Free Python Practice" : "Python Editor"}</span><div className="flex-1" /><Button size="sm" variant={freePractice ? "secondary" : "outline"} onClick={() => { setFreePractice(!freePractice); setResult(null); setSolution(null); }} leftIcon={<Sparkles className="h-3.5 w-3.5" />} aria-label={freePractice ? "Back to exercise" : "Free practice"} title={freePractice ? "Back to exercise" : "Free practice"}><span className="hidden sm:inline">{freePractice ? "Back to Exercise" : "Free Practice"}</span></Button>{!freePractice && <Button size="sm" onClick={() => submitMutation.mutate()} loading={submitMutation.isPending} leftIcon={!submitMutation.isPending ? <Send className="h-3.5 w-3.5" /> : undefined} aria-label="Submit solution" title="Submit solution"><span className="hidden sm:inline">Submit Solution</span></Button>}</div>
+      <div className="flex-1 min-h-0"><Sandbox key={freePractice ? "free" : "exercise"} language="python" showStdin={false} initialCode={freePractice ? "# Try anything here!\nprint(\"Hello, DSir! 🚀\")\n" : (exercise.starter_code || "# Write your solution here\n")} height="100%" onChange={setCode} /></div>
+      {result && !freePractice && <div role="status" aria-live="polite" className={cn("shrink-0 border-t px-3 sm:px-4 py-3 overflow-y-auto max-h-[42vh] lg:max-h-56", result.status === "passed" ? "border-emerald-500/30 bg-emerald-500/10" : "border-red-500/30 bg-red-500/10")}><div className="flex flex-wrap items-center gap-2 mb-2">{result.status === "passed" ? <CheckCircle className="h-5 w-5 text-emerald-400" /> : <XCircle className="h-5 w-5 text-red-400" />}<span className="text-sm font-semibold text-paper-50">{result.status === "passed" ? `Passed — ${result.score}%` : `Failed — ${result.score}%`}</span><button onClick={revealSolution} className="ml-auto text-xs font-medium text-coral-300 hover:text-coral-200 underline">Reveal reference solution</button></div>{result.error_message && <pre className="text-xs text-red-300 whitespace-pre-wrap mb-2">{result.error_message}</pre>}{solution && <pre className="mb-3 rounded-lg bg-night-700/80 p-3 text-xs text-paper-50/90 overflow-x-auto whitespace-pre">{solution}</pre>}{result.test_results?.details?.map((test: any, i: number) => <div key={i} className="mb-2 text-xs"><div className={test.passed ? "text-emerald-300" : "text-red-300"}>{test.passed ? "✅" : "❌"} {test.test}</div>{!test.passed && test.error && <pre className="mt-1 text-red-300/80 whitespace-pre-wrap pl-5">{test.error}</pre>}</div>)}</div>}
     </div>
   </div>;
 }

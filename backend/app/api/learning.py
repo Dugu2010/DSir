@@ -22,6 +22,111 @@ from datetime import datetime, timezone
 router = APIRouter(prefix="/learn", tags=["Learning"])
 
 
+# ── Course progress ─────────────────────────────────────────────
+# Declared before the three-segment lesson route below so the literal path
+# cannot be captured as a course/module/lesson tuple.
+
+@router.get("/me/course-progress/{course_slug}")
+async def get_my_course_progress(
+    course_slug: str,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    course = (await db.execute(
+        select(Course).where(
+            Course.slug == course_slug,
+            Course.status == ContentStatus.PUBLISHED,
+            Course.deleted_at.is_(None),
+        )
+    )).scalar_one_or_none()
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Course not found")
+
+    lesson_rows = (await db.execute(
+        select(Lesson, Module)
+        .join(Module, Lesson.module_id == Module.id)
+        .where(
+            Module.course_id == course.id,
+            Lesson.status == ContentStatus.PUBLISHED,
+            Lesson.deleted_at.is_(None),
+            Module.deleted_at.is_(None),
+        )
+        .order_by(Module.display_order, Lesson.display_order)
+    )).all()
+    lesson_ids = [lesson.id for lesson, _ in lesson_rows]
+
+    completed_ids: set[str] = set()
+    if lesson_ids:
+        completed_rows = (await db.execute(
+            select(LessonProgress.lesson_id).where(
+                LessonProgress.user_id == current_user.id,
+                LessonProgress.lesson_id.in_(lesson_ids),
+                LessonProgress.is_completed.is_(True),
+            )
+        )).scalars().all()
+        completed_ids = {str(item) for item in completed_rows}
+
+    total = len(lesson_rows)
+    completed = len(completed_ids)
+    next_lesson = None
+    for lesson, module in lesson_rows:
+        if str(lesson.id) not in completed_ids:
+            next_lesson = {
+                "lesson_id": str(lesson.id),
+                "lesson_slug": lesson.slug,
+                "lesson_title": lesson.title,
+                "module_slug": module.slug,
+                "module_title": module.title,
+            }
+            break
+
+    return {
+        "course_id": str(course.id),
+        "course_slug": course.slug,
+        "course_title": course.title,
+        "total_lessons": total,
+        "completed_lessons": completed,
+        "progress_percentage": round(completed / total * 100, 1) if total else 0,
+        "completed_lesson_ids": sorted(completed_ids),
+        "next_lesson": next_lesson,
+    }
+
+
+# ── Recently Viewed ─────────────────────────────────────────────
+# Also declared before the generic three-segment lesson route.
+
+@router.get("/me/recently-viewed", response_model=list[dict])
+async def get_recently_viewed(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(RecentlyViewed, Lesson, Module, Course)
+        .join(Lesson, RecentlyViewed.lesson_id == Lesson.id)
+        .join(Module, Lesson.module_id == Module.id)
+        .join(Course, Module.course_id == Course.id)
+        .where(
+            RecentlyViewed.user_id == current_user.id,
+            Course.status == ContentStatus.PUBLISHED,
+            Course.deleted_at.is_(None),
+        )
+        .order_by(RecentlyViewed.viewed_at.desc())
+        .limit(20)
+    )
+    items = []
+    for rv, lesson, module, course in result.all():
+        items.append({
+            "lesson_id": str(lesson.id),
+            "lesson_title": lesson.title,
+            "lesson_slug": lesson.slug,
+            "module_slug": module.slug,
+            "course_slug": course.slug,
+            "course_title": course.title,
+            "viewed_at": rv.viewed_at.isoformat() if rv.viewed_at else None,
+        })
+    return items
+
+
 # ── Lesson Content ──────────────────────────────────────────────
 
 @router.get("/{course_slug}/{module_slug}/{lesson_slug}", response_model=LessonResponse)
@@ -169,6 +274,9 @@ async def update_lesson_progress(
     if progress.is_completed:
         await _recalculate_course_progress(current_user.id, lesson.module_id, db)
 
+    # Commit before replying: the UI refetches progress as soon as this call
+    # succeeds, and dependency teardown runs after the response is sent.
+    await db.commit()
     return {"detail": "Progress updated"}
 
 
@@ -193,6 +301,7 @@ async def _recalculate_course_progress(user_id: UUID, module_id: UUID, db: Async
             Module.course_id == module.course_id,
             LessonProgress.user_id == user_id,
             LessonProgress.is_completed == True,
+            Lesson.deleted_at.is_(None),
         )
     )
     completed = completed_result.scalar() or 0
@@ -230,36 +339,6 @@ async def _recalculate_course_progress(user_id: UUID, module_id: UUID, db: Async
                     await gamification.check_achievements(db, user)
 
 
-# ── Recently Viewed ─────────────────────────────────────────────
-
-@router.get("/me/recently-viewed", response_model=list[dict])
-async def get_recently_viewed(
-    current_user: User = Depends(get_current_active_user),
-    db: AsyncSession = Depends(get_db),
-):
-    result = await db.execute(
-        select(RecentlyViewed, Lesson, Module, Course)
-        .join(Lesson, RecentlyViewed.lesson_id == Lesson.id)
-        .join(Module, Lesson.module_id == Module.id)
-        .join(Course, Module.course_id == Course.id)
-        .where(RecentlyViewed.user_id == current_user.id)
-        .order_by(RecentlyViewed.viewed_at.desc())
-        .limit(20)
-    )
-    items = []
-    for rv, lesson, module, course in result.all():
-        items.append({
-            "lesson_id": str(lesson.id),
-            "lesson_title": lesson.title,
-            "lesson_slug": lesson.slug,
-            "module_slug": module.slug,
-            "course_slug": course.slug,
-            "course_title": course.title,
-            "viewed_at": rv.viewed_at.isoformat() if rv.viewed_at else None,
-        })
-    return items
-
-
 # ── Lesson Exercises ────────────────────────────────────────────
 
 @router.get("/{course_slug}/{module_slug}/{lesson_slug}/exercises", response_model=list[ExerciseResponse])
@@ -281,7 +360,7 @@ async def get_lesson_exercises(
 
     exercises_result = await db.execute(
         select(Exercise)
-        .where(Exercise.lesson_id == lesson.id)
+        .where(Exercise.lesson_id == lesson.id, Exercise.deleted_at.is_(None))
         .order_by(Exercise.display_order)
     )
     exercises = exercises_result.scalars().all()

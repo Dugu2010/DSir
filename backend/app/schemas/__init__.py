@@ -314,6 +314,7 @@ class QuizResponse(BaseModel):
     description: Optional[str]
     passing_score: int
     time_limit_minutes: Optional[int]
+    max_attempts: Optional[int] = None
     question_count: int
 
     class Config:
@@ -343,6 +344,24 @@ class QuestionOptionResponse(BaseModel):
 
 class QuizSubmission(BaseModel):
     answers: dict[str, Any]
+    # Attempts started via POST /quizzes/{id}/attempts carry their id so the
+    # server can grade against the start time it recorded. It is optional only
+    # for backwards compatibility with older clients; such submissions get a
+    # fresh attempt with no measured duration.
+    attempt_id: Optional[UUID] = None
+    # {question_id: seconds}. Clamped server-side against real elapsed time.
+    question_times: dict[str, float] = {}
+
+
+class QuizAttemptStartResponse(BaseModel):
+    attempt_id: UUID
+    started_at: datetime
+    expires_at: Optional[datetime]
+    time_limit_seconds: Optional[int]
+    attempts_used: int
+    attempts_remaining: Optional[int]
+    max_attempts: Optional[int]
+    best_score: float
 
 
 class QuizDetailResponse(BaseModel):
@@ -351,6 +370,11 @@ class QuizDetailResponse(BaseModel):
     description: Optional[str]
     passing_score: int
     time_limit_minutes: Optional[int]
+    max_attempts: Optional[int] = None
+    attempts_used: int = 0
+    attempts_remaining: Optional[int] = None
+    best_score: float = 0
+    can_attempt: bool = True
     questions: list["QuestionResponse"] = []
 
     class Config:
@@ -359,13 +383,22 @@ class QuizDetailResponse(BaseModel):
 
 class QuizResultResponse(BaseModel):
     quiz_id: UUID
+    attempt_id: Optional[UUID] = None
     score: float
     passed: bool
     total_points: int
     earned_points: int
+    # XP actually granted for this attempt (improvement over previous best).
+    xp_earned: int = 0
     correct_answers: int
     total_questions: int
+    attempt_number: int = 1
+    attempts_remaining: Optional[int] = None
+    best_score: float = 0
+    duration_seconds: int = 0
+    question_times: dict[str, int] = {}
     completed_at: datetime
+    feedback: list[dict] = []
 
 
 # ── Projects ────────────────────────────────────────────────────
@@ -739,13 +772,18 @@ class AICourseImportResponse(BaseModel):
 class QuizAttemptResponse(BaseModel):
     id: UUID
     quiz_id: UUID
+    status: str = "submitted"
     score: float
     passed: bool
     earned_points: int
     total_points: int
     correct_answers: int
     total_questions: int
-    completed_at: datetime
+    xp_awarded: int = 0
+    duration_seconds: Optional[int] = None
+    question_times: Optional[dict[str, int]] = None
+    started_at: Optional[datetime] = None
+    completed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -783,6 +821,43 @@ class KnowledgeItemResponse(BaseModel):
     mastery_level: float
     confidence: float
     assessment_count: int
+
+
+# ── Independent Practice Snippets ────────────────────────────────
+
+class SavedSnippetCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+    code: str = Field(min_length=1, max_length=200_000)
+    stdin: Optional[str] = Field(default=None, max_length=20_000)
+    language: str = Field(default="python", pattern=r"^python$")
+
+
+class SavedSnippetUpdate(BaseModel):
+    title: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    code: Optional[str] = Field(default=None, min_length=1, max_length=200_000)
+    stdin: Optional[str] = Field(default=None, max_length=20_000)
+
+
+class SavedSnippetResponse(BaseModel):
+    id: UUID
+    title: str
+    language: str
+    code: str
+    stdin: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class QuizFeedbackItem(BaseModel):
+    question_id: UUID
+    question: str
+    correct: bool
+    explanation: Optional[str] = None
+    correct_option_ids: list[str] = []
+    selected_option_ids: list[str] = []
 
 
 # ── Rebuild forward refs ────────────────────────────────────────

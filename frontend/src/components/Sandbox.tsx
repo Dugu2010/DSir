@@ -12,8 +12,11 @@ interface SandboxProps {
   readOnly?: boolean;
   height?: string;
   className?: string;
+  stdin?: string;
+  showStdin?: boolean;
   onRun?: (code: string, output: string) => void;
   onChange?: (code: string) => void;
+  onStdinChange?: (value: string) => void;
 }
 
 // Pyodide is loaded from the official jsDelivr distribution so the deployed
@@ -78,10 +81,14 @@ export default function Sandbox({
   readOnly = false,
   height = "300px",
   className,
+  stdin = "",
+  showStdin = true,
   onRun,
   onChange,
+  onStdinChange,
 }: SandboxProps) {
   const [code, setCode] = useState(initialCode);
+  const [stdinText, setStdinText] = useState(stdin);
   const [output, setOutput] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [isFullscreen, setFullscreen] = useState(false);
@@ -92,6 +99,10 @@ export default function Sandbox({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const runIdRef = useRef(0);
+
+  useEffect(() => {
+    setStdinText(stdin);
+  }, [stdin]);
 
   useEffect(() => {
     if (language !== "python") {
@@ -156,6 +167,16 @@ export default function Sandbox({
         }
 
         let result = "";
+        if (stdinText.trim()) {
+          let delivered = false;
+          pyodide.setStdin({
+            stdin: () => {
+              if (delivered) return "";
+              delivered = true;
+              return stdinText.endsWith("\n") ? stdinText : stdinText + "\n";
+            },
+          });
+        }
         pyodide.setStdout({
           batched: (text: string) => {
             result += text + "\n";
@@ -234,7 +255,7 @@ export default function Sandbox({
       setOutput(`Error: ${error?.message || error}`);
       setIsRunning(false);
     }
-  }, [code, isRunning, language, onRun, pyodide]);
+  }, [code, isRunning, language, onRun, pyodide, stdinText]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Tab") {
@@ -312,10 +333,12 @@ export default function Sandbox({
         <button
           onClick={runCode}
           disabled={isRunning || (language === "python" && pyLoading)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-coral-500 text-night-600 hover:bg-coral-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          aria-label={isRunning ? "Running code" : "Run code"}
+          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-coral-500 text-night-600 hover:bg-coral-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
         >
           {isRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5 fill-current" />}
-          Run {language === "python" ? "(Ctrl+Enter)" : ""}
+          <span>Run</span>
+          <span className="hidden sm:inline">{language === "python" ? "(Ctrl+Enter)" : ""}</span>
         </button>
       </div>
 
@@ -331,17 +354,41 @@ export default function Sandbox({
           }}
           onKeyDown={handleKeyDown}
           readOnly={readOnly}
-          className="flex-1 w-full bg-transparent text-paper-50/90 dark:text-ink font-mono text-sm p-4 resize-none outline-none scrollbar-thin"
+          className="flex-1 min-h-[140px] w-full bg-transparent text-paper-50/90 dark:text-ink font-mono text-[13px] sm:text-sm p-3 sm:p-4 resize-none outline-none scrollbar-thin"
           style={{ fontFamily: "'JetBrains Mono', 'Fira Code', monospace", lineHeight: 1.7 }}
           spellCheck={false}
           placeholder={placeholder[language]}
+          aria-label="Code editor"
         />
 
-        <div className="h-1 bg-paper-50/10 dark:bg-white/5 cursor-row-resize hover:bg-coral-500/60 transition-colors" />
+        {language === "python" && showStdin && (
+          <div className="shrink-0 border-t border-paper-50/10 dark:border-white/5 bg-paper-50/[0.03]">
+            <label htmlFor="sandbox-stdin" className="flex items-center gap-2 px-3 pt-2 text-[10px] font-mono uppercase tracking-eyebrow text-paper-50/45 dark:text-ink-tertiary">
+              Standard input (optional)
+            </label>
+            <textarea
+              id="sandbox-stdin"
+              value={stdinText}
+              onChange={(event) => {
+                setStdinText(event.target.value);
+                onStdinChange?.(event.target.value);
+              }}
+              rows={2}
+              placeholder={"One value per line, for input() calls"}
+              className="w-full resize-y bg-transparent px-3 py-1.5 font-mono text-xs text-paper-50/80 dark:text-ink-secondary outline-none placeholder:text-paper-50/25 dark:placeholder:text-ink-tertiary/60"
+              spellCheck={false}
+            />
+          </div>
+        )}
+
+        <div className="h-1 bg-paper-50/10 dark:bg-white/5" />
 
         <div
           ref={outputRef}
-          className="h-[120px] overflow-y-auto bg-night-600 border-t border-paper-50/10 dark:border-white/5 p-3 font-mono text-xs text-paper-50/80 dark:text-ink-secondary"
+          role="status"
+          aria-live="polite"
+          aria-label="Program output"
+          className="h-[110px] sm:h-[130px] shrink-0 overflow-auto bg-night-600 border-t border-paper-50/10 dark:border-white/5 p-3 font-mono text-[11px] sm:text-xs text-paper-50/80 dark:text-ink-secondary"
         >
           {output ? (
             <pre className="whitespace-pre-wrap break-words">{output}</pre>

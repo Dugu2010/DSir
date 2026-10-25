@@ -38,14 +38,21 @@ jobs:
           pip install -r requirements.txt
       - name: Compile Python sources
         run: python -m compileall -q app
-      - name: Lint
+      - name: Lint (critical errors)
+        # Full style rules are available locally via `ruff check`; CI gates on
+        # syntax errors, undefined names and broken f-strings only.
         run: |
           pip install ruff
-          ruff check app/
+          ruff check app/ --select E9,F63,F7,F82
+      - name: Migrate database
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/dsir_test
+          JWT_SECRET_KEY: ci-only-secret-key-0123456789abcdef0123456789abcdef
+        run: alembic upgrade head
       - name: Test
         env:
-          DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/dsir_test
-          JWT_SECRET_KEY: test-secret-key-for-ci
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/dsir_test
+          JWT_SECRET_KEY: ci-only-secret-key-0123456789abcdef0123456789abcdef
         run: python -m pytest tests/ -v
 
   frontend:

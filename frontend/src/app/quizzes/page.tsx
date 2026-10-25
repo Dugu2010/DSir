@@ -37,7 +37,7 @@ export default function QuizzesPage() {
           Quizzes
         </h1>
         <p className="text-ink-secondary mt-1">
-          Test your knowledge and earn XP for correct answers.
+          Test your knowledge. Attempts are limited, and retakes only earn XP when you beat your best score.
         </p>
       </div>
 
@@ -63,7 +63,7 @@ export default function QuizzesPage() {
                 {quiz.course_title && (
                   <p className="text-xs font-mono text-ink-tertiary mb-2">{quiz.course_title}</p>
                 )}
-                <div className="flex items-center gap-4 text-xs text-ink-tertiary">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-tertiary">
                   <span className="flex items-center gap-1">
                     <HelpCircle className="h-3.5 w-3.5" /> {quiz.question_count} Qs
                   </span>
@@ -72,6 +72,11 @@ export default function QuizzesPage() {
                       <Timer className="h-3.5 w-3.5" /> {quiz.time_limit_minutes} min
                     </span>
                   )}
+                  {quiz.max_attempts ? (
+                    <span className="flex items-center gap-1">
+                      <Award className="h-3.5 w-3.5" /> {quiz.max_attempts} attempts
+                    </span>
+                  ) : null}
                   <span className="flex items-center gap-1 text-coral-600 dark:text-coral-400 font-medium ml-auto">
                     Start <ChevronRight className="h-3.5 w-3.5" />
                   </span>

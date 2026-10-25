@@ -24,8 +24,11 @@ cp .env.example .env
 # Run database migrations
 alembic upgrade head
 
-# Seed data
+# Seed base demo data
 python -m app.seed
+
+# Seed/refresh the authored Python curriculum (idempotent)
+python -m app.seed_curriculum
 
 # Start development server
 uvicorn app.main:app --reload --port 8000
@@ -36,8 +39,11 @@ uvicorn app.main:app --reload --port 8000
 ```bash
 docker-compose up -d
 
-# Seed database
+# Apply migrations and seed
+# (run from the host; the api container has the application files)
+docker-compose exec api alembic upgrade head
 docker-compose exec api python -m app.seed
+docker-compose exec api python -m app.seed_curriculum
 ```
 
 ### API Documentation

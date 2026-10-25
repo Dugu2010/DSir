@@ -24,8 +24,7 @@ the AI and code sandbox are wired, and troubleshooting.
                         │  • static land-│   │  FastAPI + uvicorn   │
                         │    ing (/)     │   │  (systemd dsir-      │
                         │  • proxies app │   │   backend)           │
-                        │    routes +    │   └──────┬───────────────┘
-                        │    /pyodide/   │          │
+                        │    routes      │   └──────┬───────────────┘
                         └──────┬─────────┘          │
                                │                    ├─ PostgreSQL :5432 (systemd)
                                ▼                    ├─ Redis :6379      (Docker)
@@ -72,7 +71,6 @@ DSir/
 │   └── .env                 #   secrets + config (git-ignored)
 ├── frontend/                # Next.js 15 application
 │   ├── src/                 #   app pages, components, lib/
-│   ├── public/pyodide/      #   self-hosted Pyodide runtime (offline Python sandbox)
 │   ├── .env.local           #   NEXT_PUBLIC_API_URL
 │   └── .next/               #   production build output
 ├── landing/                 # static landing page source
@@ -147,9 +145,10 @@ cd /data/home/sam/DSir/backend
 # create a new migration after editing models
 .venv/bin/alembic revision --autogenerate -m "description"
 
-# seed demo data (courses, users, exercises)
+# seed demo users/base data, then the authored curriculum
 .venv/bin/python -m app.seed
 .venv/bin/python -m app.seed_learning
+.venv/bin/python -m app.seed_curriculum
 
 # restart after backend code changes
 sudo systemctl restart dsir-backend
@@ -196,19 +195,26 @@ A backup of the previous Cloudflare config is kept at `backend/.env.bak.cloudfla
 
 ---
 
-## 7. Code sandbox (offline Pyodide)
+## 7. Code sandbox (browser Pyodide + isolated grader)
 
-The in-browser Python sandbox is **self-hosted** — it does not hit a CDN.
+The in-browser Python sandbox runs **Pyodide/WebAssembly in the learner's browser**.
+It does not execute code on the application server.
 
-- Runtime files live in `frontend/public/pyodide/` (`pyodide.js`, `pyodide.asm.js`,
-  `pyodide.asm.wasm`, `python_stdlib.zip`, `pyodide-lock.json`).
-- `frontend/src/components/Sandbox.tsx` loads them from `/pyodide/`.
-- nginx proxies `/pyodide/` → `:3001` (see `/etc/nginx/conf.d/dsir-landing.conf`) with
-  a 1-day cache header.
+- `frontend/src/components/Sandbox.tsx` loads pinned Pyodide assets from
+  `https://cdn.jsdelivr.net/pyodide/v314.0.6/full/`.
+- The deployed Content-Security-Policy must allow `cdn.jsdelivr.net` in
+  `script-src` and `connect-src`. Without that, the sandbox shows a load error;
+  it does not fall back to server execution.
+- Python `input()` is supported through the workspace's Standard input box. The
+  sandbox cannot read or write the host filesystem and has no network access.
+- Exercise submission uses `backend/app/services/code_runner.py`: a short-lived
+  child process with CPU/memory/file-size limits, a restricted import list, and
+  an AST check that rejects `os`, `sys`, `subprocess`, `open`, dunder access, and
+  similar escape routes. Client-side results are ignored; the server grades.
 
 Supported languages: **Python** (Pyodide/WebAssembly), **JavaScript**, **HTML**.
-Only the Python **standard library** is bundled — third-party packages (numpy etc.)
-are not available in the sandbox.
+Only the Python **standard library** is available in the browser sandbox;
+third-party packages (numpy etc.) are not bundled.
 
 ---
 
@@ -220,7 +226,7 @@ Config: `/etc/nginx/conf.d/dsir-landing.conf`
   (SPA fallback to `index.html`).
 - Specific app routes (`/login`, `/dashboard`, `/courses`, `/practice`, `/revision`,
   `/profile`, `/settings`, `/achievements`, `/notifications`, `/bookmarks`, `/ai`,
-  `/admin`, `/_next`, `/pyodide/`) are proxied to Next.js on `:3001`.
+  `/admin`, `/_next`) are proxied to Next.js on `:3001`.
 - **Important:** if you add a new top-level app route, add a matching nginx
   `location` block and `sudo nginx -t && sudo nginx -s reload`.
 
@@ -245,9 +251,10 @@ sudo nginx -s reload     # apply
 | Symptom | Likely cause / fix |
 |---------|--------------------|
 | Site returns 502 through the tunnel | `dsir-frontend` or `dsir-backend` down → `systemctl status dsir-backend dsir-frontend`, restart as needed |
-| `/pyodide/*` returns HTML (landing page) | nginx missing the `/pyodide/` proxy block → add it and reload nginx (§8) |
 | AI import returns "No AI provider configured" | backend `.env` missing a key or Ollama down → check `ollama list` and `AI_OPENAI_BASE_URL` |
 | AI generation returns invalid JSON | model too small / over-long response → the parser salvages truncated JSON; try `qwen2.5-coder:14b` |
+| Sandbox says “Python runtime could not load” | CSP or network blocks `cdn.jsdelivr.net`; allow it in `script-src`/`connect-src` or self-host the Pyodide assets |
+| Curriculum is missing after deploy | run `.venv/bin/alembic upgrade head` and `.venv/bin/python -m app.seed_curriculum` |
 | Frontend change doesn't show up | forgot to rebuild → §4 (`npm run build` + restart) |
 | Login works locally but not publicly | check `CORS_ORIGINS` includes both tunnel domains, and `NEXT_PUBLIC_API_URL` |
 | Port already in use | `ss -tlnp \| grep :<port>` to find the PID |

@@ -91,6 +91,15 @@ export default function LearnPage() {
   const progressMutation = useMutation({
     mutationFn: (data: { is_completed: boolean }) =>
       learning.updateProgress(slug, currentModuleSlug, activeLesson!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["lesson-progress", slug, currentModuleSlug, activeLesson],
+      });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["knowledge"] });
+      toast.success("Lesson completed! 🎉");
+    },
+    onError: () => toast.error("Could not save your progress. Please try again."),
   });
 
   const { data: notes } = useQuery({
@@ -129,7 +138,6 @@ export default function LearnPage() {
 
   const markComplete = () => {
     progressMutation.mutate({ is_completed: true });
-    toast.success("Lesson completed! 🎉");
   };
 
   const handleCopyCode = (code: string) => {
@@ -144,7 +152,7 @@ export default function LearnPage() {
   if (structLoading) return <PageLoader />;
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] -m-4 lg:-m-8">
+    <div className="flex h-[calc(100dvh-8rem)] min-h-[32rem] -m-4 lg:-m-8 overflow-hidden">
       {/* Sidebar - Curriculum (drawer on mobile, inline on desktop) */}
       {(drawer === "desktop" || drawer === "mobile") && (
         <>
@@ -158,7 +166,7 @@ export default function LearnPage() {
           <div
             className={`${
               drawer === "mobile"
-                ? "fixed inset-y-0 left-0 w-80 shadow-2xl z-50"
+                ? "fixed inset-y-0 left-0 w-[min(20rem,85vw)] shadow-2xl z-50"
                 : "hidden lg:flex w-80 flex-shrink-0 h-full"
             } flex-col border-r border-border dark:border-white/10 bg-surface`}
             role="complementary"
@@ -223,7 +231,7 @@ export default function LearnPage() {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Lesson top bar */}
-        <div className="flex items-center gap-2 px-4 lg:px-6 py-3 border-b border-border dark:border-white/10 bg-surface">
+        <div className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 border-b border-border dark:border-white/10 bg-surface">
           {drawer === "closed" && (
             <button
               onClick={toggleDrawer}
@@ -237,16 +245,18 @@ export default function LearnPage() {
           {lesson && (
             <button
               onClick={scrollToSandbox}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-coral-500 to-coral-400 text-night-600 hover:from-coral-400 hover:to-coral-300 transition-all shadow-md shadow-coral-500/30 ring-2 ring-coral-500/30 hover:ring-coral-400/50"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-coral-500 to-coral-400 text-night-600 hover:from-coral-400 hover:to-coral-300 transition-all shadow-md shadow-coral-500/30 ring-2 ring-coral-500/30 hover:ring-coral-400/50"
               title="Jump to the code playground"
+              aria-label="Jump to the code playground"
             >
-              <Play className="h-3.5 w-3.5 fill-current" /> Try it Out
+              <Play className="h-3.5 w-3.5 fill-current" /> <span className="hidden sm:inline">Try it Out</span>
             </button>
           )}
           <Button
             variant="outline"
             size="sm"
             leftIcon={<BookMarked className="h-4 w-4" />}
+            aria-label="Bookmark this lesson"
             onClick={() => {
               if (!lesson?.id) return;
               users.createBookmark({ lesson_id: lesson.id })
@@ -254,15 +264,16 @@ export default function LearnPage() {
                 .catch(() => toast.error("Failed to save bookmark"));
             }}
           >
-            Bookmark
+            <span className="hidden sm:inline">Bookmark</span>
           </Button>
           <Button
             variant="outline"
             size="sm"
             leftIcon={<PenLine className="h-4 w-4" />}
+            aria-label="Open lesson notes"
             onClick={() => setNotesOpen(true)}
           >
-            Notes
+            <span className="hidden sm:inline">Notes</span>
           </Button>
         </div>
 
@@ -271,7 +282,7 @@ export default function LearnPage() {
           {lessonLoading ? (
             <PageLoader />
           ) : lesson ? (
-            <div className="max-w-3xl mx-auto px-6 py-8">
+            <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 min-w-0">
               {/* Header */}
               <div className="mb-8">
                 <div className="flex items-center gap-3 mb-3">
@@ -287,7 +298,7 @@ export default function LearnPage() {
                     <Badge key={tag} size="sm" variant="outline">{tag}</Badge>
                   ))}
                 </div>
-                <h1 className="font-display text-3xl font-semibold tracking-tight text-ink">{lesson.title}</h1>
+                <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-ink break-words">{lesson.title}</h1>
                 {lesson.description && (
                   <p className="mt-2 text-ink-secondary">{lesson.description}</p>
                 )}
@@ -331,6 +342,7 @@ export default function LearnPage() {
                   initialCode={starter?.code ?? `# Experiment with what you just learned!
 print("Hello, DSir!")`}
                   height="280px"
+                  showStdin={false}
                 />
               </div>
             </div>
@@ -347,16 +359,17 @@ print("Hello, DSir!")`}
 
         {/* Bottom navigation */}
         {lesson && (
-          <div className="flex items-center justify-between px-6 py-4 border-t border-border dark:border-white/10 bg-surface">
+          <div className="flex items-center justify-between gap-2 px-3 sm:px-6 py-3 sm:py-4 border-t border-border dark:border-white/10 bg-surface">
             <div>
               {nav.prev ? (
                 <Button
                   variant="ghost"
                   size="sm"
                   leftIcon={<ChevronLeft className="h-4 w-4" />}
+                  aria-label="Previous lesson"
                   onClick={() => setActiveLesson(nav.prev!.slug)}
                 >
-                  Previous
+                  <span className="hidden sm:inline">Previous</span>
                 </Button>
               ) : (
                 <div />
@@ -378,9 +391,10 @@ print("Hello, DSir!")`}
                   variant="ghost"
                   size="sm"
                   rightIcon={<ChevronRight className="h-4 w-4" />}
+                  aria-label="Next lesson"
                   onClick={() => setActiveLesson(nav.next!.slug)}
                 >
-                  Next
+                  <span className="hidden sm:inline">Next</span>
                 </Button>
               ) : (
                 <div />

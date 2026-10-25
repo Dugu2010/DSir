@@ -83,6 +83,9 @@ async def signup(data: UserCreate, db: AsyncSession = Depends(get_db)):
     # Queue an email verification link (no-op if SMTP is not configured).
     asyncio.create_task(_send_verification(user))
 
+    # Commit before replying so the new account is visible to the token's very
+    # next request and cannot look like a 401 during the dependency teardown.
+    await db.commit()
     return TokenResponse(access_token=access_token, refresh_token=raw_refresh)
 
 
@@ -109,6 +112,7 @@ async def login(data: UserLogin, request: Request, db: AsyncSession = Depends(ge
         ip_address=request.client.host if request.client else None,
     )
     db.add(refresh)
+    await db.commit()
 
     return TokenResponse(access_token=access_token, refresh_token=raw_refresh)
 
@@ -145,6 +149,9 @@ async def refresh_token(data: RefreshTokenRequest, db: AsyncSession = Depends(ge
         expires_at=expires_at,
     )
     db.add(new_token)
+    # Persist the rotation and revocation together before the client can use
+    # either token again.
+    await db.commit()
 
     return TokenResponse(access_token=access_token, refresh_token=raw_refresh)
 
@@ -161,6 +168,7 @@ async def logout(current_user: User = Depends(get_current_active_user), db: Asyn
     now = datetime.now(timezone.utc)
     for token in tokens:
         token.revoked_at = now
+    await db.commit()
 
     return {"detail": "Logged out successfully"}
 

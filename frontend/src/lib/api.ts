@@ -182,6 +182,13 @@ export const practice = {
     request<import("./types").Submission>(`/api/v1/practice/exercises/${exerciseId}/submit`, { method: "POST", body: { code, language } }),
   getSubmissions: (page = 1, exerciseId?: string) =>
     request(`/api/v1/practice/submissions?page=${page}&size=20${exerciseId ? `&exercise_id=${exerciseId}` : ""}`),
+  listSnippets: () => request<import("./types").SavedSnippet[]>("/api/v1/practice/snippets"),
+  createSnippet: (data: { title: string; code: string; stdin?: string }) =>
+    request<import("./types").SavedSnippet>("/api/v1/practice/snippets", { method: "POST", body: data }),
+  updateSnippet: (id: string, data: { title?: string; code?: string; stdin?: string }) =>
+    request<import("./types").SavedSnippet>(`/api/v1/practice/snippets/${id}`, { method: "PUT", body: data }),
+  deleteSnippet: (id: string) =>
+    request(`/api/v1/practice/snippets/${id}`, { method: "DELETE" }),
 };
 
 // Revision
@@ -218,8 +225,14 @@ export const quizzes = {
   },
   getDetail: (quizId: string) =>
     request<import("./types").QuizDetail>(`/api/v1/quizzes/${quizId}`),
-  submit: (quizId: string, answers: Record<string, unknown>) =>
-    request<import("./types").QuizResult>(`/api/v1/quizzes/${quizId}/submit`, { method: "POST", body: { answers } }),
+  startAttempt: (quizId: string) =>
+    request<import("./types").QuizAttemptStart>(`/api/v1/quizzes/${quizId}/attempts`, { method: "POST" }),
+  submit: (quizId: string, payload: {
+    answers: Record<string, unknown>;
+    attempt_id?: string;
+    question_times?: Record<string, number>;
+  }) =>
+    request<import("./types").QuizResult>(`/api/v1/quizzes/${quizId}/submit`, { method: "POST", body: payload }),
   getResults: (quizId: string) =>
     request<import("./types").QuizResult>(`/api/v1/quizzes/${quizId}/results`),
 };

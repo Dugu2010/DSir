@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { ErrorState } from "@/components/ui/States";
-import { Code2, Bug, Wrench, Zap, Search, Clock, Star, Play, Filter, ArrowRight } from "lucide-react";
+import { Code2, Bug, Wrench, Zap, Search, Clock, Star, Play, Filter, ArrowRight, TerminalSquare } from "lucide-react";
 import type { Exercise } from "@/lib/types";
 import toast from "react-hot-toast";
 
@@ -53,8 +53,18 @@ export default function PracticePage() {
       <div className="relative overflow-hidden rounded-3xl bg-ink dark:bg-night-500 border border-border dark:border-white/5 p-8 md:p-10 text-paper-50 dark:text-ink">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-coral-500/60 to-transparent" aria-hidden="true" />
         <p className="eyebrow mb-3 !text-coral-400">No. 04 — Practice</p>
-        <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-tight">Practice Hub</h1>
-        <p className="text-paper-50/70 dark:text-ink-secondary mt-1 max-w-xl">Sharpen your skills with hands-on coding exercises.</p>
+        <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:justify-between">
+          <div>
+            <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-tight">Practice Hub</h1>
+            <p className="text-paper-50/70 dark:text-ink-secondary mt-1 max-w-xl">Sharpen your skills with hands-on coding exercises.</p>
+          </div>
+          <Link
+            href="/practice/workspace"
+            className="inline-flex items-center justify-center gap-2 shrink-0 rounded-xl bg-coral-500 px-4 py-2.5 text-sm font-semibold text-night-600 hover:bg-coral-400 transition-colors"
+          >
+            <TerminalSquare className="h-4 w-4" /> Open workspace
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}

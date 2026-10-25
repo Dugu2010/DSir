@@ -275,6 +275,7 @@ export interface QuizListItem {
   description: string | null;
   passing_score: number;
   time_limit_minutes: number | null;
+  max_attempts: number | null;
   question_count: number;
   course_title?: string | null;
   course_slug?: string | null;
@@ -286,7 +287,23 @@ export interface QuizDetail {
   description: string | null;
   passing_score: number;
   time_limit_minutes: number | null;
+  max_attempts: number | null;
+  attempts_used: number;
+  attempts_remaining: number | null;
+  best_score: number;
+  can_attempt: boolean;
   questions: Question[];
+}
+
+export interface QuizAttemptStart {
+  attempt_id: string;
+  started_at: string;
+  expires_at: string | null;
+  time_limit_seconds: number | null;
+  attempts_used: number;
+  attempts_remaining: number | null;
+  max_attempts: number | null;
+  best_score: number;
 }
 
 export interface Question {
@@ -304,15 +321,43 @@ export interface QuestionOption {
   is_correct: boolean;
 }
 
+export interface QuizFeedbackItem {
+  question_id: string;
+  question: string;
+  correct: boolean;
+  explanation: string | null;
+  correct_option_ids: string[];
+  selected_option_ids: string[];
+}
+
 export interface QuizResult {
   quiz_id: string;
+  attempt_id?: string | null;
   score: number;
   passed: boolean;
   total_points: number;
   earned_points: number;
+  /** XP actually granted: only the improvement over the previous best. */
+  xp_earned: number;
   correct_answers: number;
   total_questions: number;
+  attempt_number: number;
+  attempts_remaining: number | null;
+  best_score: number;
+  duration_seconds: number;
+  question_times: Record<string, number>;
   completed_at: string;
+  feedback?: QuizFeedbackItem[];
+}
+
+export interface SavedSnippet {
+  id: string;
+  title: string;
+  language: string;
+  code: string;
+  stdin: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 // ── Projects ───────────────────────────────────────────────────

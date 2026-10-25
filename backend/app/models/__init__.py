@@ -346,6 +346,9 @@ class Quiz(Base):
     description = Column(Text, nullable=True)
     passing_score = Column(Integer, nullable=False, default=70)
     time_limit_minutes = Column(Integer, nullable=True)
+    # Graded attempts a learner may spend on this quiz. NULL = unlimited;
+    # in-progress attempts do not count until they are submitted or expire.
+    max_attempts = Column(Integer, nullable=True, default=3)
     question_count = Column(Integer, nullable=False, default=0)
     display_order = Column(Integer, nullable=False, default=0)
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
@@ -868,9 +871,22 @@ class QuizAttempt(Base):
     total_questions = Column(Integer, nullable=False, default=0)
     passed = Column(Boolean, nullable=False, default=False)
     answers = Column(JSON, nullable=True)
-    completed_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    # in_progress | submitted | expired
+    status = Column(String(16), nullable=False, default="submitted", server_default="submitted")
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    duration_seconds = Column(Integer, nullable=True)
+    # {question_id: seconds spent} as reported by the client and clamped by
+    # the server against the attempt's real elapsed time.
+    question_times = Column(JSON, nullable=True)
+    # XP actually granted for this attempt. Retakes only grant the
+    # improvement over the learner's previous best, so this is often 0.
+    xp_awarded = Column(Integer, nullable=False, default=0, server_default="0")
     created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
-    __table_args__ = (Index('ix_quizattempt_user_id_completed_at', user_id, completed_at),)
+    __table_args__ = (
+        Index('ix_quizattempt_user_id_completed_at', user_id, completed_at),
+        Index('ix_quiz_attempts_user_quiz_status', user_id, quiz_id, status),
+    )
 
 
 # ── Course Reviews ──────────────────────────────────────────────
@@ -887,3 +903,22 @@ class CourseReview(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (UniqueConstraint("user_id", "course_id"),)
+
+
+# ── Independent Practice Workspace ──────────────────────────────
+
+class SavedSnippet(Base):
+    __tablename__ = "saved_snippets"
+
+    id = uuid_pk()
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    title = Column(String(120), nullable=False)
+    language = Column(String(20), nullable=False, default="python")
+    code = Column(Text, nullable=False)
+    stdin = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (Index("ix_saved_snippets_user_updated", user_id, updated_at),)
+
+    user = relationship("User")

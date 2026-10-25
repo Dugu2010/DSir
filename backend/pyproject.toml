@@ -81,15 +81,16 @@ pretty = true
 strict_equality = true
 
 [tool.ruff]
-select = ["E", "F", "W", "C", "N", "I"]
-ignore = ["E501", "E203", "W503", "N806"]
 line-length = 88
 target-version = "py312"
 extend-exclude = [".git", "__pycache__", "build", "dist", "*.egg-info", ".venv", "venv", ".mypy_cache", ".ruff_cache", "alembic/versions/*"]
 
+[tool.ruff.lint]
+select = ["E", "F", "W", "C", "N", "I"]
+ignore = ["E501", "E203", "N806"]
+
 [tool.ruff.format]
 quote-style = "double"
-indent-width = 4
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

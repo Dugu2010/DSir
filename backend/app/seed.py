@@ -195,46 +195,44 @@ Continue when ready — each lesson builds on the previous. 🚀
 
 
 async def seed():
+    """Seed the base demo workspace.
+
+    This function is intentionally conservative: it only inserts base rows when
+    the demo admin is missing. It never deletes courses, users, progress, or
+    submissions, so running it on a live database is safe.
+    """
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     async with async_session_factory() as db:
-        # Check if seed needs to run - look for bad content from previous broken seed
-        result = await db.execute(select(Lesson).where(Lesson.content == "Content not available.").limit(1))
-        if result.scalar_one_or_none():
-            print("Detected placeholder content from previous seed. Re-seeding...")
-        else:
-            # Check if admin already exists
-            result2 = await db.execute(select(User).where(User.email == "admin@dsir.dev"))
-            if result2.scalar_one_or_none():
-                print("Already seeded. Skipping.")
-                return
+        existing_admin = await db.execute(select(User).where(User.email == "admin@dsir.dev"))
+        if existing_admin.scalar_one_or_none():
+            print("Base demo data already present. Skipping base seed.")
+            return
 
-        print("Seeding DSir database...")
+        print("Seeding DSir base database...")
 
-        # If there's placeholder content from a previous broken seed, clean up first
-        old_content = await db.execute(select(Lesson).where(Lesson.content == "Content not available.").limit(1))
-        if old_content.scalar_one_or_none():
-            print("Cleaning up placeholder content from previous seed...")
-            # Delete in order to respect foreign keys
-            from sqlalchemy import text
-            await db.execute(text("DELETE FROM lesson_progress WHERE 1=1"))
-            await db.execute(text("DELETE FROM exercises WHERE 1=1"))
-            await db.execute(text("DELETE FROM lessons WHERE 1=1"))
-            await db.execute(text("DELETE FROM modules WHERE 1=1"))
-            await db.execute(text("DELETE FROM courses WHERE 1=1"))
-            await db.execute(text("DELETE FROM user_stats WHERE 1=1"))
-            await db.execute(text("DELETE FROM notifications WHERE 1=1"))
-            await db.execute(text("DELETE FROM achievements WHERE 1=1"))
-            await db.execute(text("DELETE FROM feature_flags WHERE 1=1"))
-            await db.execute(text("DELETE FROM technology_stacks WHERE 1=1"))
-            await db.execute(text("DELETE FROM categories WHERE 1=1"))
-            await db.execute(text("DELETE FROM refresh_tokens WHERE 1=1"))
-            await db.execute(text("DELETE FROM oauth_accounts WHERE 1=1"))
-            await db.execute(text("DELETE FROM enrollments WHERE 1=1"))
-            await db.execute(text("DELETE FROM users WHERE 1=1"))
-            await db.flush()
-            print("Cleanup complete. Re-seeding with proper content...")
+        # The authored curriculum may already have been seeded on its own
+        # (`python -m app.seed_curriculum`). Reuse those rows by their unique
+        # natural keys instead of failing the deploy on duplicate slugs, and
+        # never re-insert the modules or lessons that already exist.
+        existing_categories = {
+            category.slug: category
+            for category in (await db.execute(select(Category))).scalars().all()
+        }
+        existing_stack_slugs = set(
+            (await db.execute(select(TechnologyStack.slug))).scalars().all()
+        )
+        existing_courses = {
+            course.slug: course
+            for course in (await db.execute(select(Course))).scalars().all()
+        }
+        existing_achievement_names = set(
+            (await db.execute(select(Achievement.name))).scalars().all()
+        )
+        existing_flag_names = set(
+            (await db.execute(select(FeatureFlag.name))).scalars().all()
+        )
 
         # ── Users ──
         admin = User(id=uuid4(), email="admin@dsir.dev", username="admin",
@@ -258,20 +256,34 @@ async def seed():
             ("web","Web Development","Frontend and backend development","globe"),
             ("data","Data Science & AI","Data science, ML, and AI","brain"),
             ("devops","DevOps & Cloud","Infrastructure and deployment","server")]:
-            cats[s] = Category(name=n, slug=s, description=d, icon=i)
-            db.add(cats[s])
+            category = existing_categories.get(s)
+            if category is None:
+                category = Category(name=n, slug=s, description=d, icon=i)
+                db.add(category)
+            cats[s] = category
 
         # ── Tech Stacks ──
         for s, n, ck in [("python","Python","programming"),("javascript","JavaScript","programming"),
             ("html","HTML","web"),("css","CSS","web"),("react","React","web"),
             ("fastapi","FastAPI","web"),("postgresql","PostgreSQL","data"),
             ("docker","Docker","devops"),("git","Git","devops"),("sql","SQL","data")]:
-            db.add(TechnologyStack(name=n, slug=s, category_id=cats[ck].id, is_featured=True))
+            if s not in existing_stack_slugs:
+                db.add(TechnologyStack(name=n, slug=s, category_id=cats[ck].id, is_featured=True))
 
         # ── Courses ──
         courses = {}
+        new_course_keys = set()
 
-        py_course = Course(id=uuid4(), title="Python Programming: From Zero to Hero",
+        def _course(key: str, **fields) -> Course:
+            course = existing_courses.get(fields["slug"])
+            if course is None:
+                course = Course(id=uuid4(), **fields)
+                db.add(course)
+                new_course_keys.add(key)
+            courses[key] = course
+            return course
+
+        py_course = _course("python", title="Python Programming: From Zero to Hero",
             slug="python-programming",
             description="Master Python from basics to advanced. Build projects and become job-ready.",
             long_description="Comprehensive Python course: fundamentals, OOP, file handling, projects.",
@@ -282,10 +294,8 @@ async def seed():
             enrollment_count=15420, rating_average=4.8, rating_count=3240,
             is_featured=True, is_free=True, author_id=admin.id,
             published_at=datetime(2024,1,15,tzinfo=timezone.utc))
-        db.add(py_course)
-        courses["python"] = py_course
 
-        js_course = Course(id=uuid4(), title="JavaScript: The Complete Guide",
+        js_course = _course("javascript", title="JavaScript: The Complete Guide",
             slug="javascript-complete-guide",
             description="Master JavaScript from fundamentals to async programming. Build interactive web apps.",
             long_description="Complete JS: variables, functions, DOM, async/await, projects.",
@@ -296,10 +306,8 @@ async def seed():
             enrollment_count=12100, rating_average=4.7, rating_count=2890,
             is_featured=True, is_free=True, author_id=admin.id,
             published_at=datetime(2024,2,1,tzinfo=timezone.utc))
-        db.add(js_course)
-        courses["javascript"] = js_course
 
-        web_course = Course(id=uuid4(), title="HTML & CSS: Build Beautiful Websites",
+        web_course = _course("htmlcss", title="HTML & CSS: Build Beautiful Websites",
             slug="html-css-fundamentals",
             description="Build stunning, responsive websites with HTML5 and CSS3.",
             long_description="Master HTML5 semantics, CSS3, Flexbox, Grid, responsive design, animations.",
@@ -310,8 +318,6 @@ async def seed():
             enrollment_count=18900, rating_average=4.9, rating_count=4100,
             is_featured=True, is_free=True, author_id=admin.id,
             published_at=datetime(2024,1,10,tzinfo=timezone.utc))
-        db.add(web_course)
-        courses["htmlcss"] = web_course
 
         await db.flush()
 
@@ -376,6 +382,10 @@ async def seed():
         }
 
         for course_key, modules_data in structure.items():
+            if course_key not in new_course_keys:
+                # Keep existing content (including the authored curriculum)
+                # exactly as it is.
+                continue
             course = courses[course_key]
             tag = course.title.split(":")[0].split()[0]
             for mi, (ms, mt, md, lessons_list) in enumerate(modules_data):
@@ -421,7 +431,8 @@ async def seed():
             ("html-master","HTML Hero","Complete all HTML & CSS lessons","🎨",AchievementCategory.LEARNING,300),
             ("js-ninja","JavaScript Ninja","Complete all JavaScript lessons","🥷",AchievementCategory.LEARNING,300),
         ]:
-            db.add(Achievement(name=title,description=desc,icon=icon,category=cat,xp_reward=xp,criteria={"type":name}))
+            if title not in existing_achievement_names:
+                db.add(Achievement(name=title,description=desc,icon=icon,category=cat,xp_reward=xp,criteria={"type":name}))
 
         # ── Feature Flags ──
         for name, desc, enabled in [
@@ -430,7 +441,8 @@ async def seed():
             ("enable_registration","Allow registration",True),
             ("enable_leaderboards","Enable leaderboards",True),
         ]:
-            db.add(FeatureFlag(name=name,description=desc,is_enabled=enabled))
+            if name not in existing_flag_names:
+                db.add(FeatureFlag(name=name,description=desc,is_enabled=enabled))
 
         # ── Demo Notifications ──
         for t, title, body in [
@@ -443,7 +455,7 @@ async def seed():
         print("✓ DSir database seeded successfully!")
         print("  Admin → admin@dsir.dev / Admin@123!")
         print("  Demo  → demo@dsir.dev  / Demo@123!")
-        print(f"  3 courses, {sum(len(md) for md in modules_data)} modules, 26 lessons created")
+        print(f"  {len(new_course_keys)} new course(s), existing content preserved")
 
         await db.commit()
 

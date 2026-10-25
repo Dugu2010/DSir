@@ -114,6 +114,23 @@ class Settings(BaseSettings):
                 values[key] = None
         return values
 
+    @model_validator(mode="after")
+    def _require_strong_production_secret(self):
+        """Refuse to boot production with a placeholder signing key."""
+        if str(self.ENVIRONMENT).lower() != "production":
+            return self
+        placeholders = {
+            "change-me-in-production-use-a-strong-random-secret",
+            "generate-a-strong-random-secret-here",
+            "changeme",
+            "secret",
+        }
+        if self.JWT_SECRET_KEY.strip().lower() in placeholders or len(self.JWT_SECRET_KEY) < 32:
+            raise ValueError(
+                "JWT_SECRET_KEY must be a unique secret of at least 32 characters in production"
+            )
+        return self
+
 
 @lru_cache()
 def get_settings() -> Settings:

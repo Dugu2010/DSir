@@ -274,8 +274,8 @@ async def seed_learning() -> None:
             if not course:
                 continue
             existing = (await db.execute(
-                select(Quiz).where(Quiz.course_id == course.id)
-            )).scalar_one_or_none()
+                select(Quiz).where(Quiz.course_id == course.id).limit(1)
+            )).first()
             if existing:
                 continue
 
@@ -309,8 +309,8 @@ async def seed_learning() -> None:
             if not course:
                 continue
             existing = (await db.execute(
-                select(Project).where(Project.course_id == course.id)
-            )).scalar_one_or_none()
+                select(Project).where(Project.course_id == course.id).limit(1)
+            )).first()
             if existing:
                 continue
             db.add(Project(
