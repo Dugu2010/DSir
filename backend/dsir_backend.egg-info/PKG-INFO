@@ -1,0 +1,45 @@
+Metadata-Version: 2.4
+Name: dsir-backend
+Version: 1.0.0
+Summary: DSir Backend - AI-powered programming education platform
+Author: DSir Team
+Requires-Python: >=3.12
+Requires-Dist: fastapi<1.0,>=0.110
+Requires-Dist: uvicorn[standard]<1.0,>=0.30
+Requires-Dist: gunicorn<24,>=22
+Requires-Dist: sqlalchemy[asyncio]<2.1,>=2.0.30
+Requires-Dist: asyncpg<1.0,>=0.29
+Requires-Dist: psycopg[binary]<4.0,>=3.1
+Requires-Dist: alembic<2.0,>=1.13
+Requires-Dist: pydantic<3.0,>=2.7
+Requires-Dist: pydantic-settings<3.0,>=2.3
+Requires-Dist: python-jose[cryptography]<4.0,>=3.3
+Requires-Dist: passlib[argon2]<2.0,>=1.7
+Requires-Dist: python-multipart<1.0,>=0.0.9
+Requires-Dist: redis<6.0,>=5.0
+Requires-Dist: httpx<1.0,>=0.27
+Requires-Dist: python-dotenv<2.0,>=1.0
+Requires-Dist: email-validator<3.0,>=2.1
+Requires-Dist: tenacity<10.0,>=8.0
+Requires-Dist: structlog<25.0,>=24.0
+Requires-Dist: cryptography<45,>=42
+Requires-Dist: google-generativeai<1.0,>=0.8
+Requires-Dist: pdfplumber<1.0,>=0.10
+Requires-Dist: PyPDF2<4.0,>=3.0
+Requires-Dist: Pillow<12.0,>=10.0
+Requires-Dist: safety<3.0,>=2.0
+Requires-Dist: opentelemetry-api<2.0,>=1.20
+Requires-Dist: opentelemetry-sdk<2.0,>=1.20
+Requires-Dist: opentelemetry-instrumentation-fastapi<1.0,>=0.42b
+Requires-Dist: opentelemetry-instrumentation-sqlalchemy<1.0,>=0.42b
+Requires-Dist: opentelemetry-instrumentation-redis<1.0,>=0.42b
+Requires-Dist: opentelemetry-exporter-prometheus<1.0,>=0.42b
+Requires-Dist: prometheus-client<1.0,>=0.19
+Provides-Extra: dev
+Requires-Dist: mypy<2.0,>=1.8; extra == "dev"
+Requires-Dist: ruff<0.5.0,>=0.4.0; extra == "dev"
+Requires-Dist: pytest<9.0,>=8.0; extra == "dev"
+Requires-Dist: pytest-asyncio<0.24,>=0.23; extra == "dev"
+Requires-Dist: httpx<1.0,>=0.27; extra == "dev"
+Requires-Dist: factory-boy<4.0,>=3.3; extra == "dev"
+Requires-Dist: faker<25.0,>=24.0; extra == "dev"
