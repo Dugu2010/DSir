@@ -16,6 +16,19 @@ from app.config import get_settings
 
 
 LEGACY_BASELINE_REVISION = "0007_python_lesson_1_interactive"
+LEGACY_REQUIRED_TABLES = {"users", "courses", "modules", "lessons", "quizzes", "quiz_attempts"}
+
+
+def _validate_existing_schema(tables: set[str]) -> None:
+    """Reject a database with a colliding but incomplete ``users`` table."""
+    missing_tables = LEGACY_REQUIRED_TABLES - tables
+    if "users" in tables and missing_tables:
+        missing = ", ".join(sorted(missing_tables))
+        raise RuntimeError(
+            "DATABASE_URL points to an existing schema that is not a complete "
+            f"DSir database (missing: {missing}). Refusing to migrate it; "
+            "configure the service with the DSir PostgreSQL database."
+        )
 
 
 def _sync_database_url(database_url: str, environment: str) -> str:
@@ -38,15 +51,20 @@ def _adopt_legacy_schema(config: Config) -> bool:
     try:
         with engine.connect() as connection:
             inspector = inspect(connection)
-            has_users = inspector.has_table("users")
-            has_alembic_version = inspector.has_table("alembic_version")
-            has_revision = False
+            tables = set(inspector.get_table_names())
+            has_alembic_version = "alembic_version" in tables
+            revisions = []
             if has_alembic_version:
-                has_revision = connection.execute(
-                    text("SELECT EXISTS (SELECT 1 FROM alembic_version)")
-                ).scalar_one()
+                revisions = connection.execute(
+                    text("SELECT version_num FROM alembic_version")
+                ).scalars().all()
 
-        if has_users and not has_revision:
+        # A legacy DSir database was created from the ORM and already contains
+        # the core application tables. Never stamp a partial or unrelated
+        # database merely because it happens to have a table named ``users``.
+        _validate_existing_schema(tables)
+
+        if "users" in tables and not revisions:
             print(
                 "Existing DSir schema has no Alembic history; adopting it at "
                 f"{LEGACY_BASELINE_REVISION}."
