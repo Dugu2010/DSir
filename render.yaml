@@ -4,7 +4,7 @@ services:
     env: python
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: alembic upgrade head && python -m app.seed && python -m app.seed_curriculum && gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120
+    startCommand: python -m app.migrate && python -m app.seed && python -m app.seed_curriculum && gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -15,8 +15,8 @@ services:
           name: dsir-redis
           type: redis
           property: connectionString
-      - key: JWT_SECRET_KEY
-        value: "921f8d0d2b85c495018f8f793af8515e1c3dfefecf9957edb185ebdead08b904"
+      - key: JWT_SECRET
+        sync: false
       - key: JWT_ALGORITHM
         value: HS256
       - key: CORS_ORIGINS

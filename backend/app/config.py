@@ -1,4 +1,4 @@
-from pydantic import model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings
 from functools import lru_cache
 from typing import Any, Optional
@@ -31,7 +31,10 @@ class Settings(BaseSettings):
     REDIS_PASSWORD: Optional[str] = None
 
     # JWT / Auth
-    JWT_SECRET_KEY: str = "change-me-in-production-use-a-strong-random-secret"
+    JWT_SECRET_KEY: str = Field(
+        default="change-me-in-production-use-a-strong-random-secret",
+        validation_alias=AliasChoices("JWT_SECRET_KEY", "JWT_SECRET"),
+    )
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
