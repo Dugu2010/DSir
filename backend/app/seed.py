@@ -45,8 +45,7 @@ async def seed_achievement_catalog(db):
     for name, description, icon, category, xp_reward, criteria in ACHIEVEMENT_CATALOG:
         achievement = existing.get(name)
         if achievement is None:
-            # Use merge to upsert — safe under concurrent container boots.
-            db.merge(Achievement(
+            db.add(Achievement(
                 name=name, description=description, icon=icon,
                 category=category, xp_reward=xp_reward, criteria=criteria,
             ))

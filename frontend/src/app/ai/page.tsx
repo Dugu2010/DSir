@@ -54,8 +54,11 @@ export default function AIPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ai-messages", activeConv] });
-      setSending(false);
     },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Unable to send your message. Please try again.");
+    },
+    onSettled: () => setSending(false),
   });
 
   const handleSend = () => {
@@ -72,7 +75,7 @@ export default function AIPage() {
   const activeConversation = conversations?.find((c) => c.id === activeConv);
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
+    <div className="w-full min-w-0 space-y-6">
       <div>
         <p className="eyebrow mb-2">AI companions</p>
         <h1 className="font-display text-3xl font-semibold tracking-tight text-ink flex items-center gap-2">
@@ -82,9 +85,9 @@ export default function AIPage() {
         <p className="text-ink-secondary mt-1">Get help from AI tutors, reviewers, and mentors.</p>
       </div>
 
-      <div className="flex gap-6 h-[calc(100vh-16rem)]">
+      <div className="flex w-full min-w-0 flex-col md:flex-row gap-4 md:gap-6 h-[calc(100dvh-13rem)] min-h-[28rem]">
         {/* Sidebar - Conversations */}
-        <div className="w-72 flex-shrink-0 border-r border-border dark:border-white/10 pr-4 flex flex-col">
+        <div className="w-full md:w-72 md:flex-shrink-0 max-h-[45%] md:max-h-none min-h-0 border-b md:border-b-0 md:border-r border-border dark:border-white/10 pb-3 md:pb-0 md:pr-4 flex flex-col">
           {/* Assistant buttons */}
           <div className="space-y-1 mb-4">
             {assistants.map((a) => (
@@ -158,7 +161,7 @@ export default function AIPage() {
         </div>
 
         {/* Chat area */}
-        <div className="flex-1 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
           {activeConv ? (
             <>
               {/* Messages */}

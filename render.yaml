@@ -18,7 +18,7 @@ services:
       - key: JWT_ALGORITHM
         value: HS256
       - key: CORS_ORIGINS
-        value: '["https://dsir.vercel.app","http://localhost:3000"]'
+        value: '["https://dsir-umber.vercel.app","https://dsir.vercel.app","http://localhost:3000"]'
       - key: ENVIRONMENT
         value: production
       - key: AI_DEFAULT_PROVIDER

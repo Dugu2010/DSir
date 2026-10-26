@@ -333,7 +333,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </header>
 
         {/* Page content */}
-        <main id="main-content" className="flex-1 p-4 lg:p-8 animate-fade-in">{children}</main>
+        <main id="main-content" className="flex-1 min-w-0 p-4 lg:p-8 animate-fade-in">{children}</main>
       </div>
     </div>
   );
