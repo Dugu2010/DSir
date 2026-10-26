@@ -7,9 +7,7 @@ services:
     startCommand: python -m app.migrate && python -m app.seed && python -m app.seed_curriculum && gunicorn app.main:app --workers 2 --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 120
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: dsir-db
-          property: connectionString
+        sync: false
       - key: REDIS_URL
         fromService:
           name: dsir-redis
@@ -39,11 +37,6 @@ services:
         sync: false
 
 databases:
-  - name: dsir-db
-    databaseName: dsir
-    user: dsir_user
-    plan: starter
-
   - name: dsir-redis
     ipAllowList: []
     plan: starter
