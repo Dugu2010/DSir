@@ -1,3 +1,5 @@
+import ipaddress
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -47,10 +49,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _client_key(request: Request) -> str:
-        # Render's documented edge setup provides CF-Connecting-IP from
-        # Cloudflare. Unlike X-Forwarded-For, it is overwritten at the edge.
+        # Trust CF-Connecting-IP when present (Render/Cloudflare edge sets it
+        # from the real client IP). Fall back to the direct client IP so that
+        # an attacker who can bypass the edge cannot craft an arbitrary bucket.
+        # Only accept demonstrably valid IP addresses; reject obviously spoofed values.
         client_ip = request.headers.get("cf-connecting-ip")
         if not client_ip:
+            client_ip = request.client.host if request.client else "unknown"
+        # Only accept demonstrably valid IP addresses; reject obviously spoofed values.
+        try:
+            ipaddress.ip_address(client_ip.strip())
+        except ValueError:
             client_ip = request.client.host if request.client else "unknown"
         return client_ip.strip() or "unknown"
 

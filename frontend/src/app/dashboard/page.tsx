@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { users, learning } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -21,6 +21,8 @@ import { useState } from "react";
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [goalEditorOpen, setGoalEditorOpen] = useState(false);
   const { data, isLoading, error, refetch } = useQuery<Dashboard>({
     queryKey: ["dashboard"],
     queryFn: () => users.getDashboard(),
@@ -34,6 +36,14 @@ export default function DashboardPage() {
   const { data: recentlyViewed } = useQuery({
     queryKey: ["recently-viewed"],
     queryFn: () => learning.getRecentlyViewed(),
+  });
+
+  const updateGoal = useMutation({
+    mutationFn: users.updateDailyGoal,
+    onSuccess: async () => {
+      setGoalEditorOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+    },
   });
 
   if (isLoading) return <PageLoader />;
@@ -102,24 +112,63 @@ export default function DashboardPage() {
       </div>
 
       {/* Daily Goal */}
-      {data.daily_goal && (
-        <Card padding="md" className="border-coral-200 dark:border-coral-500/20 bg-coral-50/60 dark:bg-coral-500/5">
-          <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-3">
-              <Target className="h-5 w-5 text-coral-500" />
-              <div>
-                <h3 className="font-display font-semibold text-ink">Daily Goal</h3>
-                <p className="text-sm text-ink-secondary">
-                  {data.daily_goal.actual_minutes}/{data.daily_goal.target_minutes} min •
-                  {data.daily_goal.actual_lessons}/{data.daily_goal.target_lessons} lessons •
-                  {data.daily_goal.actual_exercises}/{data.daily_goal.target_exercises} exercises
-                </p>
-              </div>
+      <Card padding="md" className="border-coral-200 dark:border-coral-500/20 bg-coral-50/60 dark:bg-coral-500/5">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <Target className="h-5 w-5 text-coral-500" />
+            <div>
+              <h3 className="font-display font-semibold text-ink">Daily Goal</h3>
+              <p className="text-sm text-ink-secondary">
+                {data.daily_goal?.actual_minutes ?? 0}/{data.daily_goal?.target_minutes ?? 30} min •
+                {data.daily_goal?.actual_lessons ?? 0}/{data.daily_goal?.target_lessons ?? 1} lessons •
+                {data.daily_goal?.actual_exercises ?? 0}/{data.daily_goal?.target_exercises ?? 2} exercises
+              </p>
             </div>
-            {data.daily_goal.is_completed && <Badge variant="success">Completed!</Badge>}
           </div>
-        </Card>
-      )}
+          <div className="flex items-center gap-3">
+            {data.daily_goal?.is_completed && <Badge variant="success">Completed!</Badge>}
+            <Button type="button" variant="outline" size="sm" onClick={() => setGoalEditorOpen((open) => !open)}>
+              {goalEditorOpen ? "Cancel" : "Edit goal"}
+            </Button>
+          </div>
+        </div>
+        {goalEditorOpen && (
+          <form
+            className="mt-5 border-t border-coral-200 dark:border-coral-500/20 pt-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const values = new FormData(event.currentTarget);
+              updateGoal.mutate({
+                target_minutes: Number(values.get("target_minutes")),
+                target_lessons: Number(values.get("target_lessons")),
+                target_exercises: Number(values.get("target_exercises")),
+              });
+            }}
+          >
+            <div className="grid sm:grid-cols-3 gap-4">
+              <label className="text-sm font-medium text-ink">
+                Minutes
+                <input name="target_minutes" type="number" min={5} max={480} required defaultValue={data.daily_goal?.target_minutes ?? 30}
+                  className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-ink" />
+              </label>
+              <label className="text-sm font-medium text-ink">
+                Lessons
+                <input name="target_lessons" type="number" min={1} max={50} required defaultValue={data.daily_goal?.target_lessons ?? 1}
+                  className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-ink" />
+              </label>
+              <label className="text-sm font-medium text-ink">
+                Exercises
+                <input name="target_exercises" type="number" min={1} max={100} required defaultValue={data.daily_goal?.target_exercises ?? 2}
+                  className="mt-1 block w-full rounded-lg border border-border bg-surface px-3 py-2 text-ink" />
+              </label>
+            </div>
+            {updateGoal.isError && <p role="alert" className="mt-3 text-sm text-red-600">Could not update your goal. Please try again.</p>}
+            <div className="mt-4 flex justify-end">
+              <Button type="submit" size="sm" loading={updateGoal.isPending}>Save goal</Button>
+            </div>
+          </form>
+        )}
+      </Card>
 
       {/* Continue Learning */}
       <section>

@@ -48,27 +48,32 @@ async def _redis_delete(key: str) -> None:
 async def signup(data: UserCreate, db: AsyncSession = Depends(get_db)):
     if not settings.ENABLE_REGISTRATION:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Registration is currently disabled")
-
-    existing = await db.execute(select(User).where(User.email == data.email))
-    if existing.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
-
-    existing_user = await db.execute(select(User).where(User.username == data.username))
-    if existing_user.scalar_one_or_none():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already taken")
+    # Normalize email to lowercase to prevent case-duplicate accounts.
+    email = data.email.lower().strip()
 
     user = User(
-        email=data.email,
+        email=email,
         username=data.username,
         display_name=data.display_name,
         password_hash=hash_password(data.password),
     )
     db.add(user)
+
+    # Flush so the DB generates user.id before we create the stats row.
     await db.flush()
 
     stats = UserStats(user_id=user.id)
     db.add(stats)
-    await db.flush()
+
+    # Commit before replying so the new account is visible to the token's very
+    # next request and cannot look like a 401 during the dependency teardown.
+    try:
+        await db.commit()
+    except Exception as exc:
+        # sqlalchemy's IntegrityError from unique constraint → 409
+        if "UNIQUE constraint failed" in str(exc) or "duplicate key" in str(exc).lower():
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email or username already registered")
+        raise
 
     access_token = create_access_token(str(user.id), user.role.value)
     raw_refresh, token_hash, expires_at = create_refresh_token(str(user.id), user.role.value)
@@ -83,15 +88,15 @@ async def signup(data: UserCreate, db: AsyncSession = Depends(get_db)):
     # Queue an email verification link (no-op if SMTP is not configured).
     asyncio.create_task(_send_verification(user))
 
-    # Commit before replying so the new account is visible to the token's very
-    # next request and cannot look like a 401 during the dependency teardown.
-    await db.commit()
     return TokenResponse(access_token=access_token, refresh_token=raw_refresh)
+
 
 
 @router.post("/login", response_model=TokenResponse)
 async def login(data: UserLogin, request: Request, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(User).where(User.email == data.email, User.deleted_at.is_(None)))
+    # Normalize email to lowercase for lookup (signup lowercases on write).
+    email = data.email.lower().strip()
+    result = await db.execute(select(User).where(User.email == email, User.deleted_at.is_(None)))
     user = result.scalar_one_or_none()
     if not user or not verify_password(data.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
@@ -188,7 +193,27 @@ async def change_password(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
 
     current_user.password_hash = hash_password(data.new_password)
-    return {"detail": "Password changed successfully"}
+    # Revoke all existing refresh tokens so stolen sessions cannot survive a password change.
+    tokens = await db.execute(
+        select(RefreshToken).where(RefreshToken.user_id == current_user.id, RefreshToken.revoked_at.is_(None))
+    )
+    now = datetime.now(timezone.utc)
+    for t in tokens.scalars().all():
+        t.revoked_at = now
+    await db.commit()
+
+    # Issue new tokens so the user stays logged in.
+    access_token = create_access_token(str(current_user.id), current_user.role.value)
+    raw_refresh, token_hash, expires_at = create_refresh_token(str(current_user.id), current_user.role.value)
+    refresh = RefreshToken(
+        user_id=current_user.id,
+        token_hash=token_hash,
+        expires_at=expires_at,
+    )
+    db.add(refresh)
+    await db.commit()
+
+    return {"detail": "Password changed successfully", "access_token": access_token, "refresh_token": raw_refresh}
 
 
 # ── Password Reset ──────────────────────────────────────────────
@@ -211,9 +236,11 @@ async def _send_verification(user: User) -> None:
 
 @router.post("/forgot-password")
 async def forgot_password(data: PasswordResetRequest, db: AsyncSession = Depends(get_db)):
+    # Normalize email to lowercase for lookup (signup lowercases on write).
+    email = data.email.lower().strip()
     generic = {"detail": "If that email is registered, a reset link has been sent."}
     result = await db.execute(
-        select(User).where(User.email == data.email, User.deleted_at.is_(None))
+        select(User).where(User.email == email, User.deleted_at.is_(None))
     )
     user = result.scalar_one_or_none()
     if not user:

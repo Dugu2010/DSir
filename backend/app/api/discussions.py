@@ -9,6 +9,7 @@ from app.schemas import (
     VoteRequest, PaginatedResponse,
 )
 from app.utils.deps import get_current_active_user
+from app.services import gamification
 from app.models import User
 from uuid import UUID
 from datetime import datetime, timezone
@@ -86,6 +87,7 @@ async def create_discussion(
     )
     db.add(discussion)
     await db.flush()
+    await gamification.check_achievements(db, current_user)
     await db.commit()
 
     resp = DiscussionResponse.model_validate(discussion)
@@ -164,6 +166,7 @@ async def add_reply(
     discussion.updated_at = datetime.now(timezone.utc)
 
     await db.flush()
+    await gamification.check_achievements(db, current_user)
     await db.commit()
 
     resp = DiscussionReplyResponse.model_validate(reply)

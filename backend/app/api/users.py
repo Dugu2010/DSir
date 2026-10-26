@@ -124,9 +124,21 @@ async def update_daily_goal(
         goal = DailyGoal(user_id=current_user.id, goal_date=today)
         db.add(goal)
         await db.flush()
+    was_completed = goal.is_completed
     goal.target_minutes = data.target_minutes
     goal.target_lessons = data.target_lessons
     goal.target_exercises = data.target_exercises
+    goal.is_completed = (
+        goal.actual_minutes >= goal.target_minutes
+        and goal.actual_lessons >= goal.target_lessons
+        and goal.actual_exercises >= goal.target_exercises
+    )
+    if goal.is_completed and not was_completed:
+        await gamification.notify(
+            db, current_user.id, NotificationType.STREAK,
+            "Daily goal completed! 🎯",
+            "You hit your daily learning goal. Great work!",
+        )
 
     # Persist the minutes preference so tomorrow's goal defaults to it too.
     prefs = dict(current_user.preferences or {})

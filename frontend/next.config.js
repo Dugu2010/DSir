@@ -16,6 +16,42 @@ const nextConfig = {
       { protocol: "https", hostname: "**" },
     ],
   },
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          // Content Security Policy — lock down to DSir resources only.
+          {
+            key: "Content-Security-Policy",
+            value: [
+              "default-src 'none'",
+              "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline' 'wasm-unsafe-eval'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data:",
+              "connect-src 'self' http://localhost:8000 https: wss:",
+              "font-src 'self'",
+              "frame-src 'self' about:",
+              "frame-ancestors 'none'",
+              "base-uri 'none'",
+              "form-action 'none'",
+            ].join("; "),
+          },
+          // Prevent clickjacking.
+          { key: "X-Frame-Options", value: "DENY" },
+          // Referrer leak protection.
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // HSTS — only on production over HTTPS.
+          {
+            key: "Strict-Transport-Security",
+            value: "max-age=31536000; includeSubDomains; preload",
+            // Only apply when ENV=production and request is HTTPS.
+            // We set it via middleware for the API; here we set a default.
+          },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

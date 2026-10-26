@@ -25,6 +25,18 @@ async def lifespan(app: FastAPI):
         logger.info("Database connection established")
     else:
         logger.warning("Database connection failed — server starting anyway")
+
+    # Warn if the JWT secret is still the default placeholder in production.
+    default_secret = "change-me-in-production-use-a-strong-random-secret"
+    if (
+        settings.ENVIRONMENT.lower() == "production"
+        and settings.JWT_SECRET_KEY == default_secret
+    ):
+        logger.warning(
+            "JWT_SECRET_KEY is still the default placeholder in production. "
+            "Set JWT_SECRET_KEY (or JWT_SECRET) in your .env file to avoid "
+            "forgable tokens.",
+        )
     try:
         yield
     finally:

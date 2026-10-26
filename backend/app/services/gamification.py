@@ -17,7 +17,7 @@ from app.models import (
     User, UserStats, Achievement, UserAchievement, Notification,
     NotificationType, DailyGoal, LeaderboardEntry, Enrollment,
     Lesson, Module, Course, LessonProgress, Submission,
-    KnowledgeTopic, UserKnowledge,
+    KnowledgeTopic, UserKnowledge, Discussion, DiscussionReply, QuizAttempt,
 )
 
 logger = structlog.get_logger()
@@ -211,8 +211,8 @@ async def check_achievements(db: AsyncSession, user: User) -> list[Achievement]:
     for ach in all_achs:
         if str(ach.id) in unlocked_ids:
             continue
-        key = (ach.criteria or {}).get("type") or ach.name
-        if _meets_criteria(key, ctx):
+        criteria = ach.criteria or {"type": ach.name}
+        if _meets_criteria(criteria, ctx):
             db.add(UserAchievement(user_id=user.id, achievement_id=ach.id))
             await notify(
                 db, user.id, NotificationType.ACHIEVEMENT,
@@ -247,6 +247,25 @@ async def _build_achievement_context(db: AsyncSession, user_id: UUID, stats: Use
             )
         )
     ).scalar() or 0
+    discussion_count = (
+        await db.execute(
+            select(func.count(Discussion.id)).where(Discussion.user_id == user_id)
+        )
+    ).scalar() or 0
+    reply_count = (
+        await db.execute(
+            select(func.count(DiscussionReply.id)).where(DiscussionReply.user_id == user_id)
+        )
+    ).scalar() or 0
+    passed_quiz_count = (
+        await db.execute(
+            select(func.count(distinct(QuizAttempt.quiz_id))).where(
+                QuizAttempt.user_id == user_id,
+                QuizAttempt.passed == True,
+                QuizAttempt.status == "submitted",
+            )
+        )
+    ).scalar() or 0
 
     return {
         "lessons_completed": stats.lessons_completed,
@@ -254,6 +273,10 @@ async def _build_achievement_context(db: AsyncSession, user_id: UUID, stats: Use
         "current_streak": stats.current_streak,
         "perfect_score": perfect is not None,
         "courses_completed": course_count,
+        "discussions_created": discussion_count,
+        "replies_created": reply_count,
+        "quizzes_passed": passed_quiz_count,
+        "total_xp": stats.total_xp,
         "html_completed": await _course_completed(db, user_id, "html-css-fundamentals"),
         "js_completed": await _course_completed(db, user_id, "javascript-complete-guide"),
     }
@@ -274,7 +297,27 @@ async def _course_completed(db: AsyncSession, user_id: UUID, course_slug: str) -
     return row is not None
 
 
-def _meets_criteria(key: str, ctx: dict) -> bool:
+def _meets_criteria(criteria: dict | str, ctx: dict) -> bool:
+    """Evaluate legacy named rules and threshold-based catalog rules."""
+    if isinstance(criteria, str):
+        key, threshold = criteria, None
+    else:
+        key = str(criteria.get("type", ""))
+        threshold = criteria.get("threshold")
+
+    threshold_fields = {
+        "lessons-completed": "lessons_completed",
+        "exercises-completed": "exercises_completed",
+        "streak-days": "current_streak",
+        "courses-completed": "courses_completed",
+        "discussions-created": "discussions_created",
+        "replies-created": "replies_created",
+        "quizzes-passed": "quizzes_passed",
+        "total-xp": "total_xp",
+    }
+    if key in threshold_fields and threshold is not None:
+        return ctx.get(threshold_fields[key], 0) >= int(threshold)
+
     checks = {
         "python-starter": ctx["lessons_completed"] >= 1,
         "code-warrior": ctx["exercises_completed"] >= 10,

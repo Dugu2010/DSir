@@ -38,6 +38,16 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
 
   const res = await fetch(`${API_BASE}${endpoint}`, config);
 
+  // If the response carries new auth tokens (e.g. after change-password),
+  // store them so the user stays logged in.
+  if (res.ok && typeof window !== "undefined") {
+    const data = await res.json();
+    if (data.access_token) localStorage.setItem("access_token", data.access_token);
+    if (data.refresh_token) localStorage.setItem("refresh_token", data.refresh_token);
+    // Return the relevant part of the response body (fall back to full data).
+    return (data as T) ?? (data.detail ? data as T : data) as T;
+  }
+
   if (res.status === 401 && auth && typeof window !== "undefined") {
     const refreshed = await tryRefreshToken();
     if (refreshed) {
@@ -49,8 +59,11 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
         const error = await retryRes.json().catch(() => ({}));
         throw new ApiError(retryRes.status, error.message || error.detail || "Request failed");
       }
-      return retryRes.json();
+      return (retryRes.json() as T);
     }
+    // Refresh failed — clear stale tokens and fall through to the error handler.
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("refresh_token");
   }
 
   if (!res.ok) {
@@ -59,7 +72,7 @@ async function request<T = any>(endpoint: string, options: RequestOptions = {}):
   }
 
   if (res.status === 204) return undefined as T;
-  return res.json();
+  return res.json() as T;
 }
 
 async function tryRefreshToken(): Promise<boolean> {

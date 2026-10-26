@@ -16,6 +16,49 @@ from datetime import datetime, timezone
 from uuid import uuid4
 from sqlalchemy import select
 
+
+ACHIEVEMENT_CATALOG = [
+    ("Python Starter", "Complete your first lesson", "🐍", AchievementCategory.LEARNING, 50, {"type": "python-starter"}),
+    ("Curious Learner", "Complete 10 lessons", "📚", AchievementCategory.LEARNING, 100, {"type": "lessons-completed", "threshold": 10}),
+    ("Curriculum Finisher", "Complete 40 lessons", "🎓", AchievementCategory.LEARNING, 300, {"type": "lessons-completed", "threshold": 40}),
+    ("First Exercise", "Complete your first exercise", "🧩", AchievementCategory.PRACTICE, 25, {"type": "exercises-completed", "threshold": 1}),
+    ("Code Warrior", "Complete 10 exercises", "⚔️", AchievementCategory.PRACTICE, 100, {"type": "code-warrior"}),
+    ("Practice Expert", "Complete 25 exercises", "💻", AchievementCategory.PRACTICE, 250, {"type": "exercises-completed", "threshold": 25}),
+    ("Perfect Score", "Get 100% on an exercise", "⭐", AchievementCategory.PRACTICE, 75, {"type": "perfect-score"}),
+    ("Getting Started", "Keep a 3-day learning streak", "🔥", AchievementCategory.STREAK, 50, {"type": "streak-days", "threshold": 3}),
+    ("7-Day Streak", "Maintain a 7-day learning streak", "🔥", AchievementCategory.STREAK, 200, {"type": "week-streak"}),
+    ("Monthly Momentum", "Keep learning for 30 days in a row", "🗓️", AchievementCategory.STREAK, 500, {"type": "streak-days", "threshold": 30}),
+    ("Course Graduate", "Complete your first course", "🎓", AchievementCategory.MILESTONE, 500, {"type": "course-complete"}),
+    ("Discussion Starter", "Start a discussion with the community", "💬", AchievementCategory.SOCIAL, 50, {"type": "discussions-created", "threshold": 1}),
+    ("Helpful Peer", "Reply to 5 community discussions", "🤝", AchievementCategory.SOCIAL, 100, {"type": "replies-created", "threshold": 5}),
+    ("Quiz Pass", "Pass your first quiz", "✅", AchievementCategory.SPECIAL, 50, {"type": "quizzes-passed", "threshold": 1}),
+    ("XP Collector", "Earn 1,000 XP", "✨", AchievementCategory.SPECIAL, 100, {"type": "total-xp", "threshold": 1000}),
+]
+
+
+async def seed_achievement_catalog(db):
+    """Idempotently maintain achievements even when demo accounts already exist."""
+    existing = {
+        achievement.name: achievement
+        for achievement in (await db.execute(select(Achievement))).scalars().all()
+    }
+    for name, description, icon, category, xp_reward, criteria in ACHIEVEMENT_CATALOG:
+        achievement = existing.get(name)
+        if achievement is None:
+            # Use merge to upsert — safe under concurrent container boots.
+            db.merge(Achievement(
+                name=name, description=description, icon=icon,
+                category=category, xp_reward=xp_reward, criteria=criteria,
+            ))
+        else:
+            achievement.description = description
+            achievement.icon = icon
+            achievement.category = category
+            achievement.xp_reward = xp_reward
+            achievement.criteria = criteria
+    await db.flush()
+
+
 # ── LESSON CONTENT ── (embedded for deployment)
 _LC = {
     "python": {
@@ -205,9 +248,11 @@ async def seed():
         await conn.run_sync(Base.metadata.create_all)
 
     async with async_session_factory() as db:
+        await seed_achievement_catalog(db)
         existing_admin = await db.execute(select(User).where(User.email == "admin@dsir.dev"))
         if existing_admin.scalar_one_or_none():
-            print("Base demo data already present. Skipping base seed.")
+            await db.commit()
+            print("Base demo data already present. Achievement catalog refreshed; skipping base seed.")
             return
 
         print("Seeding DSir base database...")
@@ -227,9 +272,6 @@ async def seed():
             course.slug: course
             for course in (await db.execute(select(Course))).scalars().all()
         }
-        existing_achievement_names = set(
-            (await db.execute(select(Achievement.name))).scalars().all()
-        )
         existing_flag_names = set(
             (await db.execute(select(FeatureFlag.name))).scalars().all()
         )
@@ -420,19 +462,6 @@ async def seed():
                         hints=[{"level":1,"content":"Review the lesson material"}],
                         skill_tags=[tag], points=15)
                     db.add(ex)
-
-        # ── Achievements ──
-        for name, title, desc, icon, cat, xp in [
-            ("python-starter","Python Starter","Complete your first Python lesson","🐍",AchievementCategory.LEARNING,50),
-            ("code-warrior","Code Warrior","Complete 10 exercises","⚔️",AchievementCategory.PRACTICE,100),
-            ("week-streak","7-Day Streak","Maintain a 7-day learning streak","🔥",AchievementCategory.STREAK,200),
-            ("course-complete","Course Graduate","Complete your first course","🎓",AchievementCategory.MILESTONE,500),
-            ("perfect-score","Perfect Score","Get 100% on an exercise","⭐",AchievementCategory.PRACTICE,75),
-            ("html-master","HTML Hero","Complete all HTML & CSS lessons","🎨",AchievementCategory.LEARNING,300),
-            ("js-ninja","JavaScript Ninja","Complete all JavaScript lessons","🥷",AchievementCategory.LEARNING,300),
-        ]:
-            if title not in existing_achievement_names:
-                db.add(Achievement(name=title,description=desc,icon=icon,category=cat,xp_reward=xp,criteria={"type":name}))
 
         # ── Feature Flags ──
         for name, desc, enabled in [
