@@ -4,6 +4,7 @@ Handles structured metrics (Prometheus) and OpenTelemetry tracing.
 """
 import re
 import time
+from contextlib import nullcontext
 from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -148,55 +149,49 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: Callable) -> Response:
         tracer = get_tracer()
-        span = None
-        if tracer is not None:
-            span = tracer.start_as_current_span(f"{request.method} {_resolve_endpoint(request)}")
-            span = span.__enter__()
+        # The span context manager must stay referenced until the request is
+        # handled; discarding it early garbage-collects its generator, which
+        # ends the span before any attributes are set.
+        span_cm = (
+            tracer.start_as_current_span(f"{request.method} {_resolve_endpoint(request)}")
+            if tracer is not None
+            else nullcontext(None)
+        )
 
-        start_time = time.time()
+        with span_cm as span:
+            start_time = time.time()
 
-        request_size = 0
-        content_length = request.headers.get("content-length")
-        if content_length:
-            try:
-                request_size = int(content_length)
-            except (ValueError, TypeError):
-                pass
+            request_size = 0
+            content_length = request.headers.get("content-length")
+            if content_length:
+                try:
+                    request_size = int(content_length)
+                except (ValueError, TypeError):
+                    pass
 
-        try:
             response = await call_next(request)
-        except Exception:
+
+            latency = time.time() - start_time
+
+            endpoint = _resolve_endpoint(request)
+            labels = {
+                "method": request.method,
+                "endpoint": endpoint,
+                "status_code": str(response.status_code),
+            }
+            REQUEST_COUNT.labels(**labels).inc()
+            REQUEST_LATENCY.labels(**labels).observe(latency)
+            if request_size > 0:
+                REQUEST_SIZE.labels(method=request.method, endpoint=endpoint).observe(request_size)
+
             if span is not None:
-                span.__exit__(None, None, None)
-            raise
+                if response.status_code >= 400:
+                    span.set_attribute("http.status_code", response.status_code)
+                span_context = span.get_span_context()
+                if span_context.is_valid:
+                    response.headers["X-Trace-ID"] = format(span_context.trace_id, "032x")
 
-        latency = time.time() - start_time
-
-        endpoint = _resolve_endpoint(request)
-        labels = {
-            "method": request.method,
-            "endpoint": endpoint,
-            "status_code": str(response.status_code),
-        }
-        REQUEST_COUNT.labels(**labels).inc()
-        REQUEST_LATENCY.labels(**labels).observe(latency)
-        if request_size > 0:
-            REQUEST_SIZE.labels(method=request.method, endpoint=endpoint).observe(request_size)
-
-        if span is not None:
-            if response.status_code >= 400:
-                span.set_attribute("http.status_code", response.status_code)
-            span.__exit__(None, None, None)
-
-        trace_id = None
-        if span is not None:
-            ctx = getattr(span, "get_span_context", lambda: None)()
-            if ctx is not None and hasattr(ctx, "trace_id"):
-                trace_id = ctx.trace_id
-        if trace_id:
-            response.headers["X-Trace-ID"] = format(trace_id, "032x")
-
-        return response
+            return response
 
 
 def instrument_fastapi(app):
