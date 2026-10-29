@@ -10,11 +10,13 @@ from app.models import (
     Lesson, Exercise, ContentStatus, DifficultyLevel,
     ExerciseType, ExerciseDifficulty, Achievement, FeatureFlag,
     AchievementCategory, Notification, NotificationType,
+    Enrollment, CourseReview, LessonProgress, Submission,
+    ProjectSubmission, QuizAttempt,
 )
 from app.utils.security import hash_password
 from datetime import datetime, timezone
 from uuid import uuid4
-from sqlalchemy import select
+from sqlalchemy import delete, func, select
 
 
 ACHIEVEMENT_CATALOG = [
@@ -56,6 +58,80 @@ async def seed_achievement_catalog(db):
             achievement.xp_reward = xp_reward
             achievement.criteria = criteria
     await db.flush()
+
+
+async def recompute_course_metrics(db):
+    """Derive denormalised course metrics from real rows so seed data never
+    advertises numbers the database cannot back up."""
+    module_counts = dict((await db.execute(
+        select(Module.course_id, func.count(Module.id))
+        .where(Module.deleted_at.is_(None))
+        .group_by(Module.course_id)
+    )).all())
+    lesson_counts = dict((await db.execute(
+        select(Module.course_id, func.count(Lesson.id))
+        .join(Lesson, Lesson.module_id == Module.id)
+        .where(Lesson.deleted_at.is_(None))
+        .group_by(Module.course_id)
+    )).all())
+    enrollment_counts = dict((await db.execute(
+        select(Enrollment.course_id, func.count(Enrollment.id))
+        .group_by(Enrollment.course_id)
+    )).all())
+    ratings = {
+        course_id: (round(float(average or 0), 2), int(count))
+        for course_id, average, count in (await db.execute(
+            select(CourseReview.course_id, func.avg(CourseReview.rating), func.count(CourseReview.id))
+            .group_by(CourseReview.course_id)
+        )).all()
+    }
+    for course in (await db.execute(select(Course))).scalars().all():
+        average, count = ratings.get(course.id, (0.0, 0))
+        course.module_count = module_counts.get(course.id, 0)
+        course.lesson_count = lesson_counts.get(course.id, 0)
+        course.enrollment_count = enrollment_counts.get(course.id, 0)
+        course.rating_average = average
+        course.rating_count = count
+
+
+async def reset_legacy_demo_fixture(db):
+    """Clear fabricated demo activity seeded by older releases, but only when
+    the demo account has no real learning records to preserve."""
+    demo = (await db.execute(
+        select(User).where(User.email == "demo@dsir.dev")
+    )).scalar_one_or_none()
+    if demo is None:
+        return
+
+    activity = 0
+    for model in (LessonProgress, Submission, ProjectSubmission, QuizAttempt):
+        activity += (await db.execute(
+            select(func.count()).select_from(model).where(model.user_id == demo.id)
+        )).scalar_one()
+    if activity:
+        return
+
+    stats = (await db.execute(
+        select(UserStats).where(UserStats.user_id == demo.id)
+    )).scalar_one_or_none()
+    if stats and (
+        stats.total_xp, stats.current_level, stats.current_streak,
+        stats.longest_streak, stats.lessons_completed, stats.exercises_completed,
+    ) == (1250, 5, 7, 14, 12, 28):
+        stats.total_xp = 0
+        stats.current_level = 1
+        stats.current_streak = 0
+        stats.longest_streak = 0
+        stats.last_activity_date = None
+        stats.lessons_completed = 0
+        stats.exercises_completed = 0
+
+    await db.execute(
+        delete(Notification).where(
+            Notification.user_id == demo.id,
+            Notification.title.in_(["Achievement Unlocked! 🎉", "7-Day Streak! 🔥"]),
+        )
+    )
 
 
 # ── LESSON CONTENT ── (embedded for deployment)
@@ -250,8 +326,10 @@ async def seed():
         await seed_achievement_catalog(db)
         existing_admin = await db.execute(select(User).where(User.email == "admin@dsir.dev"))
         if existing_admin.scalar_one_or_none():
+            await reset_legacy_demo_fixture(db)
+            await recompute_course_metrics(db)
             await db.commit()
-            print("Base demo data already present. Achievement catalog refreshed; skipping base seed.")
+            print("Base demo data already present. Achievement catalog refreshed and course metrics recomputed.")
             return
 
         print("Seeding DSir base database...")
@@ -287,8 +365,7 @@ async def seed():
             role="student", email_verified=True, is_active=True,
             bio="Aspiring software engineer.")
         db.add(demo)
-        db.add(UserStats(user_id=demo.id, total_xp=1250, current_level=5,
-            current_streak=7, longest_streak=14, lessons_completed=12, exercises_completed=28))
+        db.add(UserStats(user_id=demo.id))
         await db.flush()
 
         # ── Categories ──
@@ -331,8 +408,7 @@ async def seed():
             learning_objectives=["Write clean Python","Master OOP","Work with files & APIs","Build projects"],
             prerequisites=[], difficulty=DifficultyLevel.BEGINNER,
             estimated_duration_minutes=2400, status=ContentStatus.PUBLISHED,
-            skill_tags=["Python","Programming","Backend"], module_count=11, lesson_count=16,
-            enrollment_count=15420, rating_average=4.8, rating_count=3240,
+            skill_tags=["Python","Programming","Backend"],
             is_featured=True, is_free=True, author_id=admin.id,
             published_at=datetime(2024,1,15,tzinfo=timezone.utc))
 
@@ -343,8 +419,7 @@ async def seed():
             learning_objectives=["JS fundamentals","DOM manipulation","Async programming","Build web apps"],
             prerequisites=[], difficulty=DifficultyLevel.BEGINNER,
             estimated_duration_minutes=1800, status=ContentStatus.PUBLISHED,
-            skill_tags=["JavaScript","Web Development","Frontend"], module_count=5, lesson_count=8,
-            enrollment_count=12100, rating_average=4.7, rating_count=2890,
+            skill_tags=["JavaScript","Web Development","Frontend"],
             is_featured=True, is_free=True, author_id=admin.id,
             published_at=datetime(2024,2,1,tzinfo=timezone.utc))
 
@@ -355,8 +430,7 @@ async def seed():
             learning_objectives=["Semantic HTML5","Modern CSS3","Responsive layouts","Animations"],
             prerequisites=[], difficulty=DifficultyLevel.BEGINNER,
             estimated_duration_minutes=1200, status=ContentStatus.PUBLISHED,
-            skill_tags=["HTML","CSS","Web Design"], module_count=4, lesson_count=7,
-            enrollment_count=18900, rating_average=4.9, rating_count=4100,
+            skill_tags=["HTML","CSS","Web Design"],
             is_featured=True, is_free=True, author_id=admin.id,
             published_at=datetime(2024,1,10,tzinfo=timezone.utc))
 
@@ -473,12 +547,12 @@ async def seed():
                 db.add(FeatureFlag(name=name,description=desc,is_enabled=enabled))
 
         # ── Demo Notifications ──
-        for t, title, body in [
-            (NotificationType.ACHIEVEMENT,"Achievement Unlocked! 🎉","You earned: Python Starter"),
-            (NotificationType.COURSE,"New Course Available","JavaScript: The Complete Guide is live!"),
-            (NotificationType.STREAK,"7-Day Streak! 🔥","You've been learning for 7 days straight!"),
-        ]:
-            db.add(Notification(user_id=demo.id, type=t, title=title, body=body))
+        # Only announcements backed by real catalog rows; no fabricated activity.
+        db.add(Notification(user_id=demo.id, type=NotificationType.COURSE,
+            title="New Course Available",
+            body="JavaScript: The Complete Guide is now in the catalog."))
+
+        await recompute_course_metrics(db)
 
         print("✓ DSir database seeded successfully!")
         print("  Admin → admin@dsir.dev / Admin@123!")

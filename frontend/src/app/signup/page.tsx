@@ -44,12 +44,14 @@ export default function SignupPage() {
               </span>
             </Link>
 
-            <p className="eyebrow mb-4">No. 01 — Begin</p>
-            <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink tracking-tight">Create your account.</h1>
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400 mb-4">
+              {"// "}No. 01 · Begin
+            </p>
+            <h1 className="font-display text-3xl sm:text-4xl font-medium text-ink tracking-tight">Create your account.</h1>
             <p className="mt-3 text-ink-secondary">Start your journey to becoming a software engineer.</p>
 
             {error && (
-              <div className="mt-6 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 flex items-start gap-3">
+              <div className="mt-6 p-4 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 flex items-start gap-3">
                 <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
                 <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
               </div>
@@ -105,19 +107,19 @@ export default function SignupPage() {
           </div>
         </div>
 
-        <div className="hidden lg:flex relative border-l border-border dark:border-white/5 bg-ink dark:bg-night-500 items-center justify-center p-12">
+        <div className="hidden lg:flex relative border-l border-border dark:border-white/10 bg-ink dark:bg-night-500 items-center justify-center p-12">
           <div className="max-w-md">
-            <p className="eyebrow mb-4 !text-coral-400">Why DSir?</p>
-            <h2 className="font-display text-3xl font-semibold text-paper-50 dark:text-ink tracking-tight mb-8">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-400 mb-4">{"// "}Why DSir</p>
+            <h2 className="font-display text-3xl font-medium text-paper-50 dark:text-ink tracking-tight mb-8">
               A complete learning <em className="italic text-coral-400">ecosystem</em>.
             </h2>
             <div className="space-y-4">
               {[
                 "Interactive lessons with real code execution",
                 "AI tutor available 24/7 to help you learn",
-                "Practice engine with 2,000+ exercises",
+                "Practice engine with hands-on coding exercises",
                 "Smart revision to retain what you learn",
-                "Job-ready curriculum designed by engineers",
+                "A focused curriculum with clear progress tracking",
               ].map((item) => (
                 <div key={item} className="flex items-start gap-3">
                   <CheckCircle2 className="h-5 w-5 text-coral-500 mt-0.5 flex-shrink-0" aria-hidden="true" />

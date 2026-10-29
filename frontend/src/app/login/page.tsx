@@ -45,12 +45,14 @@ export default function LoginPage() {
               </span>
             </Link>
 
-            <p className="eyebrow mb-4">Sign in</p>
-            <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink tracking-tight">Welcome back.</h1>
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400 mb-4">
+              {"// "}Account access
+            </p>
+            <h1 className="font-display text-3xl sm:text-4xl font-medium text-ink tracking-tight">Welcome back.</h1>
             <p className="mt-3 text-ink-secondary">Sign in to continue your learning journey.</p>
 
             {error && (
-              <div className="mt-6 p-4 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 flex items-start gap-3 animate-slide-down">
+              <div className="mt-6 p-4 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 flex items-start gap-3 animate-slide-down">
                 <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
                 <p className="text-sm text-red-700 dark:text-red-400">{error}</p>
               </div>
@@ -94,8 +96,8 @@ export default function LoginPage() {
             </p>
 
             {/* Demo credentials */}
-            <div className="mt-8 p-4 rounded-xl bg-surface dark:bg-night-500 border border-border dark:border-white/5">
-              <p className="eyebrow mb-3 !text-[10px]">Demo credentials</p>
+            <div className="mt-8 p-4 rounded-lg bg-surface dark:bg-night-500 border border-border dark:border-white/10">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-tertiary mb-3">{"// "}Demo credentials</p>
               <div className="space-y-1.5">
                 <p className="text-xs text-ink-secondary">
                   Email: <code className="text-coral-600 dark:text-coral-400 font-mono">demo@dsir.dev</code>
@@ -109,17 +111,17 @@ export default function LoginPage() {
         </div>
 
         {/* Right — Visual */}
-        <div className="hidden lg:flex relative border-l border-border dark:border-white/5 bg-ink dark:bg-night-500 items-center justify-center p-12 overflow-hidden">
+        <div className="hidden lg:flex relative border-l border-border dark:border-white/10 bg-ink dark:bg-night-500 items-center justify-center p-12 overflow-hidden">
           <button
             onClick={toggleTheme}
-            className="absolute top-6 right-6 p-4 rounded-lg bg-white/5 hover:bg-white/10 text-paper-50/70 hover:text-paper-50 transition-colors"
+            className="absolute top-6 right-6 p-2.5 rounded-lg bg-white/5 hover:bg-white/10 text-paper-50/70 hover:text-paper-50 transition-colors"
             aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
           >
             {resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
           <div className="max-w-md">
-            <p className="eyebrow mb-4 !text-coral-400">Welcome to the Academy</p>
-            <h2 className="font-display text-3xl font-semibold text-paper-50 dark:text-ink leading-snug tracking-tight">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-400 mb-4">{"// "}Welcome to the academy</p>
+            <h2 className="font-display text-3xl font-medium text-paper-50 dark:text-ink leading-snug tracking-tight">
               Master programming <em className="italic text-coral-400">with AI</em>.
             </h2>
             <p className="mt-4 text-paper-50/70 dark:text-ink-secondary leading-relaxed">
@@ -129,9 +131,9 @@ export default function LoginPage() {
               {[
                 "Interactive lessons with real code execution",
                 "AI tutor available 24/7 to help you learn",
-                "Practice engine with 2,000+ exercises",
+                "Practice engine with hands-on coding exercises",
                 "Smart revision to retain what you learn",
-                "Job-ready curriculum designed by engineers",
+                "A focused curriculum with clear progress tracking",
               ].map((item) => (
                 <li key={item} className="flex items-start gap-3 text-paper-50/85 dark:text-ink-secondary">
                   <CheckCircle2 className="h-5 w-5 text-coral-500 mt-0.5 flex-shrink-0" aria-hidden="true" />
