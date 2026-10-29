@@ -152,7 +152,7 @@ export default function LearnPage() {
   if (structLoading) return <PageLoader />;
 
   return (
-    <div className="flex h-[calc(100dvh-8rem)] min-h-[32rem] -m-4 lg:-m-8 overflow-hidden">
+    <div className="flex h-[calc(100dvh-4rem)] min-h-[32rem] -m-4 lg:-m-8 overflow-hidden">
       {/* Sidebar - Curriculum (drawer on mobile, inline on desktop) */}
       {(drawer === "desktop" || drawer === "mobile") && (
         <>

@@ -156,7 +156,7 @@ export default function LessonPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] -m-4 lg:-m-8">
+    <div className="flex h-[calc(100dvh-4rem)] -m-4 lg:-m-8">
       {/* Lesson Content Drawer */}
       {(drawer === 'desktop' || drawer === 'mobile') && (
         <>
