@@ -39,37 +39,39 @@ export default function BookmarksPage() {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div>
-        <p className="eyebrow mb-2">Saved for later</p>
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink flex items-center gap-2">
-          <BookMarked className="h-8 w-8 text-coral-600 dark:text-coral-400" />
-          Bookmarks
-        </h1>
-        <p className="text-ink-secondary mt-1">Your saved lessons and exercises.</p>
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400">
+          {"// "}No. 12 · Saved references
+        </p>
+        <h1 className="font-display text-3xl font-medium tracking-tight text-ink mt-2">Bookmarks</h1>
+        <p className="text-ink-secondary mt-1">
+          Your saved lessons and exercises
+          {bookmarks && bookmarks.length > 0 ? ` · ${bookmarks.length} saved` : ""}.
+        </p>
       </div>
 
       {bookmarks && bookmarks.length > 0 ? (
         <div className="space-y-2">
           {bookmarks.map((b: { id: string; lesson_id?: string; exercise_id?: string; note?: string; created_at: string }) => (
-            <Card key={b.id} padding="md" className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-coral-50 dark:bg-coral-500/10 flex items-center justify-center">
+            <Card key={b.id} padding="md" className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="h-10 w-10 rounded-lg border border-coral-500/25 bg-coral-500/10 flex items-center justify-center shrink-0">
                   {b.lesson_id ? (
                     <BookOpen className="h-5 w-5 text-coral-600 dark:text-coral-400" />
                   ) : (
                     <Code2 className="h-5 w-5 text-coral-600 dark:text-coral-400" />
                   )}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm font-medium text-ink">
                     {b.lesson_id ? "Lesson" : "Exercise"}
                   </p>
-                  {b.note && <p className="text-xs text-ink-tertiary mt-0.5">{b.note}</p>}
-                  <p className="text-xs text-ink-tertiary mt-0.5">
+                  {b.note && <p className="text-xs text-ink-secondary mt-0.5 break-words">{b.note}</p>}
+                  <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-tertiary mt-1">
                     {new Date(b.created_at).toLocaleDateString()}
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -86,7 +88,7 @@ export default function BookmarksPage() {
       ) : (
         <div className="text-center py-16">
           <BookMarked className="h-12 w-12 text-ink-tertiary mx-auto mb-4" />
-          <h3 className="font-display text-lg font-semibold text-ink">No bookmarks yet</h3>
+          <h3 className="font-display text-lg font-medium text-ink">No bookmarks yet</h3>
           <p className="text-sm text-ink-secondary mt-1">Bookmark lessons and exercises to save them for later.</p>
         </div>
       )}

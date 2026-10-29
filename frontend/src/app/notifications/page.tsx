@@ -40,15 +40,22 @@ export default function NotificationsPage() {
   if (isLoading) return <PageLoader />;
 
   const notifications = data?.items || [];
+  const unreadCount = notifications.filter((n: { is_read: boolean }) => !n.is_read).length;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="eyebrow mb-2">Updates</p>
-          <h1 className="font-display text-3xl font-semibold tracking-tight text-ink flex items-center gap-2">
-            <Bell className="h-7 w-7" />
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400">
+            {"// "}No. 13 · Activity feed
+          </p>
+          <h1 className="font-display text-3xl font-medium tracking-tight text-ink mt-2">
             Notifications
+            {unreadCount > 0 && (
+              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-coral-600 dark:text-coral-400 border border-coral-500/30 bg-coral-500/5 rounded-full px-2.5 py-1 ml-3 align-middle">
+                {unreadCount} new
+              </span>
+            )}
           </h1>
           <p className="text-ink-secondary mt-1">Stay updated on your progress and activity.</p>
         </div>
@@ -68,21 +75,23 @@ export default function NotificationsPage() {
                 key={n.id}
                 padding="md"
                 onClick={!n.is_read ? () => markReadMutation.mutate(n.id) : undefined}
-                className={`transition-all ${!n.is_read ? "bg-coral-50/40 dark:bg-coral-500/5 border-coral-200 dark:border-coral-500/20 cursor-pointer" : ""}`}
+                className={`transition-colors ${!n.is_read ? "border-coral-500/25 bg-coral-500/[0.04] cursor-pointer" : ""}`}
               >
                 <div className="flex items-start gap-3">
-                  <div className={`h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                    !n.is_read ? "bg-coral-100 dark:bg-coral-500/10" : "bg-surface-secondary dark:bg-white/5"
+                  <div className={`h-10 w-10 rounded-lg flex items-center justify-center flex-shrink-0 border ${
+                    !n.is_read
+                      ? "border-coral-500/30 bg-coral-500/10"
+                      : "border-border dark:border-white/10 bg-surface-secondary dark:bg-white/5"
                   }`}>
                     <Icon className="h-5 w-5 text-coral-600 dark:text-coral-400" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className={`text-sm ${!n.is_read ? "font-semibold text-ink" : "text-ink"}`}>{n.title}</p>
-                      {!n.is_read && <div className="h-2 w-2 rounded-full bg-coral-500 flex-shrink-0" />}
+                      {!n.is_read && <div className="h-1.5 w-1.5 rounded-full bg-coral-500 flex-shrink-0" />}
                     </div>
                     {n.body && <p className="text-sm text-ink-secondary mt-0.5">{n.body}</p>}
-                    <p className="text-xs text-ink-tertiary mt-1">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-tertiary mt-1.5">
                       {new Date(n.created_at).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",
@@ -99,7 +108,7 @@ export default function NotificationsPage() {
       ) : (
         <div className="text-center py-16">
           <Bell className="h-12 w-12 text-ink-tertiary mx-auto mb-4" />
-          <h3 className="font-display text-lg font-semibold text-ink">No notifications yet</h3>
+          <h3 className="font-display text-lg font-medium text-ink">No notifications yet</h3>
           <p className="text-sm text-ink-secondary mt-1">You&apos;ll receive notifications about your learning progress and achievements.</p>
         </div>
       )}

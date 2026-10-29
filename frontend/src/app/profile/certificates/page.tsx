@@ -46,40 +46,47 @@ export default function CertificatesPage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-8">
-        <p className="eyebrow mb-2">Credentials</p>
-        <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-ink">Certificates</h1>
-        <p className="mt-1 text-ink-secondary">Your earned certificates and achievements</p>
+    <div className="max-w-4xl mx-auto space-y-8">
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400">
+          {"// "}No. 14 · Verified credentials
+        </p>
+        <h1 className="font-display text-3xl md:text-4xl font-medium tracking-tight text-ink mt-2">
+          Your <span className="italic text-coral-600 dark:text-coral-400">Certificates.</span>
+        </h1>
+        <p className="text-ink-secondary mt-1">
+          Earned certificates and achievements
+          {certificates && certificates.length > 0 ? ` · ${certificates.length} issued` : ""}.
+        </p>
       </div>
 
       {certificates && certificates.length > 0 ? (
         <div className="space-y-4">
           {certificates.map((cert) => (
             <Card key={cert.id} padding="md" className="flex flex-col sm:flex-row sm:items-center gap-4">
-              <div className="h-14 w-14 rounded-2xl bg-coral-50 dark:bg-coral-500/10 flex items-center justify-center flex-shrink-0 border border-coral-200 dark:border-coral-500/20">
+              <div className="h-14 w-14 rounded-lg bg-coral-500/10 flex items-center justify-center flex-shrink-0 border border-coral-500/25">
                 <Award className="h-7 w-7 text-coral-600 dark:text-coral-400" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h2 className="font-display font-semibold text-ink">{cert.course_title}</h2>
+                  <h2 className="font-display font-medium text-ink">{cert.course_title}</h2>
                   <Badge size="sm" variant="success">Verified</Badge>
                 </div>
-                <p className="text-sm text-ink-secondary mt-0.5">
+                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary mt-1.5">
                   Issued {formatDate(cert.issued_at)}
                 </p>
-                <p className="text-xs text-ink-tertiary mt-1 font-mono">{cert.certificate_number}</p>
+                <p className="text-[11px] text-ink-tertiary mt-0.5 font-mono">{cert.certificate_number}</p>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   onClick={() => handleDownload(cert)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-coral-500 text-night-600 text-sm font-semibold hover:bg-coral-400 transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-coral-500 text-white text-sm font-semibold hover:bg-coral-600 transition-colors"
                 >
                   <Download className="h-4 w-4" /> Download
                 </button>
                 <Link
                   href={`/courses/${cert.course_slug}`}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border dark:border-white/10 text-ink-secondary hover:text-ink hover:border-coral-400/50 transition-colors text-sm font-medium"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full border border-border dark:border-white/10 text-ink-secondary hover:text-ink hover:border-coral-400/50 transition-colors text-sm font-medium"
                 >
                   <ExternalLink className="h-4 w-4" /> Course
                 </Link>
@@ -89,14 +96,14 @@ export default function CertificatesPage() {
         </div>
       ) : (
         <div className="text-center py-16">
-          <div className="h-20 w-20 rounded-2xl bg-coral-50 dark:bg-coral-500/10 flex items-center justify-center mx-auto mb-6 border border-coral-200 dark:border-coral-500/20">
+          <div className="h-20 w-20 rounded-lg bg-coral-500/10 flex items-center justify-center mx-auto mb-6 border border-coral-500/25">
             <Award className="h-10 w-10 text-coral-600 dark:text-coral-400" />
           </div>
-          <h2 className="font-display text-lg font-semibold text-ink mb-2">No certificates yet</h2>
+          <h2 className="font-display text-lg font-medium text-ink mb-2">No certificates yet</h2>
           <p className="text-ink-secondary mb-6 max-w-sm mx-auto">
             Complete a course to earn your first certificate. Each certificate validates your skills and can be shared on your professional profiles.
           </p>
-          <Link href="/courses" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-coral-500 text-night-600 text-sm font-semibold hover:bg-coral-400 transition-colors">
+          <Link href="/courses" className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-coral-500 text-white text-sm font-semibold hover:bg-coral-600 transition-colors">
             <BookOpen className="h-4 w-4" /> Browse Courses
           </Link>
         </div>

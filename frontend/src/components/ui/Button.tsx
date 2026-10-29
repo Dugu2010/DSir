@@ -4,24 +4,25 @@ import { forwardRef, type ButtonHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
-// Editorial button variants. Primary = coral with deep-navy text (WCAG AA).
+// Obsidian Protocol buttons: pill geometry, coral primary with white text,
+// flat secondary surfaces with low-contrast outlines.
 const variants = {
   primary:
-    "bg-coral-500 text-ink-inverse hover:bg-coral-600 active:bg-coral-700 dark:text-night-600 shadow-sm",
+    "bg-coral-500 text-white hover:bg-coral-600 active:bg-coral-700 dark:text-white shadow-none",
   secondary:
-    "bg-surface text-ink hover:bg-surface-tertiary border border-border",
+    "bg-surface text-ink border border-border hover:bg-surface-tertiary hover:border-border-light",
   outline:
-    "border-2 border-coral-500 text-coral-700 dark:text-coral-400 hover:bg-coral-50 dark:hover:bg-coral-500/10",
+    "border border-coral-500/60 text-coral-700 dark:text-coral-400 hover:bg-coral-500/10 hover:border-coral-500",
   ghost: "text-ink-secondary hover:text-ink hover:bg-surface-tertiary",
   danger: "bg-red-600 text-white hover:bg-red-700 active:bg-red-800",
   success: "bg-emerald-600 text-white hover:bg-emerald-700",
 };
 
 const sizes = {
-  sm: "h-11 px-3 text-base gap-1.5 rounded-lg",
-  md: "h-12 px-4 text-base gap-2 rounded-xl",
-  lg: "h-14 px-6 text-base gap-2 rounded-xl",
-  xl: "h-16 px-8 text-base gap-2.5 rounded-2xl",
+  sm: "h-9 px-3.5 text-sm gap-1.5 rounded-full",
+  md: "h-10 px-4 text-sm gap-2 rounded-full",
+  lg: "h-11 px-5 text-sm gap-2 rounded-full",
+  xl: "h-12 px-6 text-base gap-2.5 rounded-full",
 };
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

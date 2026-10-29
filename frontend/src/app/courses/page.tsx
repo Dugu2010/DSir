@@ -17,7 +17,7 @@ import {
   GraduationCap, Layers, Filter, SlidersHorizontal, ArrowRight,
 } from "lucide-react";
 
-// Calm editorial palette for course-card headers (no gradients).
+// Calm tint for the track icon chip (no gradients).
 const CARD_TINTS = [
   "bg-coral-50 text-coral-600 dark:bg-coral-500/10 dark:text-coral-400",
   "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
@@ -89,29 +89,47 @@ export default function CoursesPage() {
 
   const hasActiveFilters = debouncedSearch || difficulty || selectedTag || sort !== "popular";
 
+  const heroStats = [
+    { icon: <BookOpen className="h-4 w-4" />, value: formatNumber(total), label: "Tracks" },
+    { icon: <GraduationCap className="h-4 w-4" />, value: items.length > 0 ? formatNumber(items.reduce((s, c) => s + c.enrollment_count, 0)) : "—", label: "Enrollments" },
+    { icon: <Layers className="h-4 w-4" />, value: String(allTags.length), label: "Topics" },
+  ];
+
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-12">
-      {/* Hero Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-ink dark:bg-night-500 border border-border dark:border-white/5 p-8 md:p-12 text-paper-50 dark:text-ink">
+      {/* Editorial hero */}
+      <header className="relative overflow-hidden rounded-xl border border-border dark:border-white/10 bg-surface dark:bg-night-500">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-coral-500/60 to-transparent" aria-hidden="true" />
-        <p className="eyebrow mb-4 !text-coral-400">No. 02 — The catalog</p>
-        <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-tight mb-3">Explore Courses</h1>
-        <p className="text-paper-50/70 dark:text-ink-secondary text-lg max-w-xl">
-          Master new skills with expert-crafted courses. From Python to AI, find your next challenge.
-        </p>
-        <div className="flex flex-wrap gap-8 mt-8">
-          <Stat icon={<BookOpen className="h-5 w-5" />} value={formatNumber(total)} label="Courses" />
-          <Stat icon={<GraduationCap className="h-5 w-5" />} value={items.length > 0 ? formatNumber(items.reduce((s, c) => s + c.enrollment_count, 0)) : "—"} label="Enrollments" />
-          <Stat icon={<Layers className="h-5 w-5" />} value={String(allTags.length)} label="Topics" />
+        <div className="p-6 md:p-10">
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-coral-600 dark:text-coral-400 mb-4">
+            — No. 02 — Curriculum architecture
+          </p>
+          <h1 className="font-display text-3xl md:text-5xl font-medium tracking-tight leading-[1.08] text-ink max-w-3xl">
+            Explore Courses — From Zero to{" "}
+            <span className="italic text-coral-600 dark:text-coral-400">Job-Ready</span>.
+          </h1>
+          <p className="mt-4 text-ink-secondary text-base md:text-lg leading-relaxed max-w-2xl">
+            Master new skills with expert-crafted tracks. From Python to AI, find your next challenge.
+          </p>
+          <div className="grid grid-cols-3 gap-4 sm:gap-8 mt-8 pt-6 border-t border-border dark:border-white/10 max-w-lg">
+            {heroStats.map((s) => (
+              <div key={s.label}>
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-tertiary flex items-center gap-1.5">
+                  <span className="text-coral-500" aria-hidden="true">{s.icon}</span>{s.label}
+                </p>
+                <p className="mt-1.5 font-display text-2xl font-medium text-ink">{s.value}</p>
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* Search + Filters */}
       <div className="space-y-4">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1 relative">
             <Input
-              placeholder="Search courses by title or topic..."
+              placeholder="Search tracks, modules, topics..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               leftIcon={<Search className="h-4 w-4" />}
@@ -144,7 +162,7 @@ export default function CoursesPage() {
         )}
 
         {showFilters && (
-          <div id="course-filters" className="flex flex-wrap items-center gap-3 p-4 rounded-2xl bg-surface-tertiary dark:bg-white/[0.03] border border-border dark:border-white/5">
+          <div id="course-filters" className="flex flex-wrap items-center gap-3 p-4 rounded-xl bg-surface dark:bg-night-500 border border-border dark:border-white/10">
             <FilterSelect label="Level" value={difficulty} onChange={setDifficulty} options={[
               { value: "", label: "All Levels" },
               { value: "beginner", label: "Beginner" },
@@ -163,16 +181,16 @@ export default function CoursesPage() {
         )}
 
         {hasActiveFilters && !showFilters && (
-          <p className="text-sm text-ink-secondary dark:text-ink-tertiary">
-            {filteredItems.length} of {items.length} courses · <button onClick={clearFilters} className="text-coral-600 dark:text-coral-400 hover:underline">Clear filters</button>
+          <p className="font-mono text-[11px] uppercase tracking-wide text-ink-tertiary">
+            {filteredItems.length} of {items.length} tracks · <button onClick={clearFilters} className="text-coral-600 dark:text-coral-400 hover:underline">Clear filters</button>
           </p>
         )}
       </div>
 
       {/* Error */}
       {error && (
-        <div className="rounded-2xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/5 p-6 flex items-center gap-4">
-          <div className="h-10 w-10 rounded-xl bg-red-100 dark:bg-red-500/10 flex items-center justify-center flex-shrink-0">
+        <div className="rounded-xl border border-red-200 dark:border-red-500/20 bg-red-50 dark:bg-red-500/5 p-6 flex items-center gap-4">
+          <div className="h-10 w-10 rounded-lg bg-red-100 dark:bg-red-500/10 flex items-center justify-center flex-shrink-0">
             <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
           </div>
           <div className="flex-1">
@@ -185,7 +203,7 @@ export default function CoursesPage() {
 
       {/* Loading */}
       {isLoading && (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
           {Array.from({ length: 6 }).map((_, i) => <CardSkeleton key={i} />)}
         </div>
       )}
@@ -193,11 +211,12 @@ export default function CoursesPage() {
       {/* Grid */}
       {!isLoading && !error && (
         filteredItems.length > 0 ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredItems.map((course, i) => (
               <CourseCard
                 key={course.id}
                 course={course}
+                index={i}
                 tint={getTint(i)}
                 icon={getIcon(i)}
                 isAdmin={isAdmin}
@@ -207,11 +226,11 @@ export default function CoursesPage() {
           </div>
         ) : (
           <div className="text-center py-20">
-            <div className="h-20 w-20 rounded-2xl bg-surface-tertiary dark:bg-white/5 flex items-center justify-center mx-auto mb-5">
-              <Search className="h-8 w-8 text-ink-tertiary" />
+            <div className="h-16 w-16 rounded-xl bg-surface-tertiary dark:bg-white/5 flex items-center justify-center mx-auto mb-5">
+              <Search className="h-7 w-7 text-ink-tertiary" />
             </div>
-            <h3 className="font-display text-lg font-semibold text-ink dark:text-ink mb-2">No courses found</h3>
-            <p className="text-sm text-ink-secondary dark:text-ink-tertiary max-w-sm mx-auto mb-6">
+            <h3 className="font-display text-lg font-medium text-ink mb-2">No courses found</h3>
+            <p className="text-sm text-ink-secondary max-w-sm mx-auto mb-6">
               Try adjusting your search or filters.
             </p>
             <Button variant="outline" onClick={clearFilters} leftIcon={<X className="h-4 w-4" />}>Clear filters</Button>
@@ -229,20 +248,20 @@ export default function CoursesPage() {
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-course-title"
-            className="bg-surface dark:bg-night-500 rounded-2xl p-6 max-w-md w-full shadow-xl border border-border dark:border-white/10"
+            className="bg-surface dark:bg-night-500 rounded-xl p-6 max-w-md w-full border border-border dark:border-white/10"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 mb-4">
-              <div className="h-12 w-12 rounded-xl bg-red-100 dark:bg-red-500/10 flex items-center justify-center">
-                <Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />
+              <div className="h-11 w-11 rounded-lg bg-red-100 dark:bg-red-500/10 flex items-center justify-center">
+                <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
               </div>
               <div>
-                <h3 id="delete-course-title" className="font-display text-lg font-semibold text-ink dark:text-ink">Delete Course</h3>
+                <h3 id="delete-course-title" className="font-display text-lg font-medium text-ink">Delete Course</h3>
                 <p className="text-sm text-ink-secondary">This will permanently delete the course and all its content.</p>
               </div>
             </div>
             <p className="text-sm text-ink-secondary mb-6">
-              Are you sure you want to delete <strong className="text-ink dark:text-ink">&ldquo;{deleteTarget.title}&rdquo;</strong>? This cannot be undone.
+              Are you sure you want to delete <strong className="text-ink">&ldquo;{deleteTarget.title}&rdquo;</strong>? This cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
               <Button variant="outline" onClick={() => setDeleteTarget(null)} disabled={deleteMutation.isPending}>Cancel</Button>
@@ -255,25 +274,13 @@ export default function CoursesPage() {
   );
 }
 
-function Stat({ icon, value, label }: { icon: React.ReactNode; value: string; label: string }) {
-  return (
-    <div className="flex items-center gap-3">
-      <div className="h-10 w-10 rounded-xl bg-coral-500/10 flex items-center justify-center text-coral-400">{icon}</div>
-      <div>
-        <div className="font-display text-xl font-bold text-paper-50 dark:text-ink">{value}</div>
-        <div className="text-xs font-mono uppercase tracking-eyebrow text-paper-50/50 dark:text-ink-tertiary">{label}</div>
-      </div>
-    </div>
-  );
-}
-
 function TagPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
       aria-pressed={active}
-      className={`px-3 py-1.5 rounded-full text-xs font-medium font-mono transition-all ${
-        active ? "bg-coral-500 text-night-600 shadow-none" : "bg-surface-tertiary dark:bg-white/5 text-ink-secondary dark:text-ink-tertiary hover:bg-coral-50 dark:hover:bg-coral-500/10 hover:text-coral-700 dark:hover:text-coral-400"
+      className={`px-3 py-1.5 rounded-full text-[11px] font-medium font-mono uppercase tracking-wide transition-colors ${
+        active ? "bg-coral-500 text-white" : "bg-surface-tertiary dark:bg-white/5 text-ink-secondary dark:text-ink-tertiary hover:bg-coral-50 dark:hover:bg-coral-500/10 hover:text-coral-700 dark:hover:text-coral-400"
       }`}
     >
       {children}
@@ -291,12 +298,12 @@ function FilterSelect({ label, value, onChange, options }: {
   return (
     <div className="flex items-center gap-2">
       <Filter className="h-4 w-4 text-ink-tertiary" aria-hidden="true" />
-      <label htmlFor={id} className="text-sm text-ink-secondary dark:text-ink-tertiary">{label}:</label>
+      <label htmlFor={id} className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">{label}:</label>
       <select
         id={id}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-9 px-3 rounded-lg border border-border dark:border-white/10 bg-surface dark:bg-night-500 text-sm text-ink dark:text-ink focus:outline-none focus:ring-2 focus:ring-coral-500"
+        className="h-9 px-3 rounded-lg border border-border dark:border-white/10 bg-surface-secondary dark:bg-night-600 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-coral-500"
       >
         {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
       </select>
@@ -304,8 +311,9 @@ function FilterSelect({ label, value, onChange, options }: {
   );
 }
 
-function CourseCard({ course, tint, icon, isAdmin, onDelete }: {
+function CourseCard({ course, index, tint, icon, isAdmin, onDelete }: {
   course: CourseListItem;
+  index: number;
   tint: string;
   icon: string;
   isAdmin: boolean;
@@ -314,40 +322,51 @@ function CourseCard({ course, tint, icon, isAdmin, onDelete }: {
   return (
     <div className="group relative">
       <Link href={`/courses/${course.slug}`}>
-        <Card hover padding="none" className="overflow-hidden h-full transition-all duration-300 hover:-translate-y-0.5">
-          <div className={`h-32 ${tint} flex items-center justify-center relative overflow-hidden border-b border-border dark:border-white/5`}>
-            <span className="text-4xl relative z-10" aria-hidden="true">{icon}</span>
-            {course.is_featured && (
-              <span className="absolute top-3 right-3 px-2.5 py-0.5 rounded-full bg-coral-500 text-night-600 text-[10px] font-mono font-bold uppercase tracking-eyebrow">Featured</span>
-            )}
-            <span className="absolute bottom-2 left-3 font-mono text-[10px] uppercase tracking-eyebrow opacity-60" aria-hidden="true">
-              No. {String(course.id.slice(-2).replace(/\D/g, "") || "—").padStart(2, "0")}
+        <Card hover padding="none" className="overflow-hidden h-full">
+          {/* Track header */}
+          <div className="relative h-24 px-5 flex items-center justify-between border-b border-border dark:border-white/10 bg-surface-secondary dark:bg-night-600/60">
+            <div className="flex items-center gap-3">
+              <span className={`h-10 w-10 rounded-lg flex items-center justify-center text-lg ${tint}`} aria-hidden="true">
+                {icon}
+              </span>
+              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-tertiary">
+                Track {String(index + 1).padStart(2, "0")}
+              </span>
+            </div>
+            <span className="font-display text-4xl font-medium text-ink/10 dark:text-ink/10 select-none" aria-hidden="true">
+              {String(index + 1).padStart(2, "0")}
             </span>
+            {course.is_featured && (
+              <span className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-coral-500 text-white text-[9px] font-mono font-bold uppercase tracking-[0.14em]">Featured</span>
+            )}
           </div>
           <div className="p-5">
-            <div className="flex items-start justify-between mb-2">
+            <div className="flex items-start justify-between mb-2.5">
               <Badge size="sm" className={difficultyColor(course.difficulty)}>{course.difficulty}</Badge>
               {course.rating_count > 0 && (
                 <div className="flex items-center gap-1">
-                  <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />
-                  <span className="text-xs font-semibold text-ink dark:text-ink">{course.rating_average}</span>
-                  <span className="text-xs text-ink-tertiary">({formatNumber(course.rating_count)})</span>
+                  <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" aria-hidden="true" />
+                  <span className="font-mono text-[11px] font-medium text-ink">{course.rating_average}</span>
+                  <span className="font-mono text-[10px] text-ink-tertiary">({formatNumber(course.rating_count)})</span>
                 </div>
               )}
             </div>
-            <h3 className="font-display font-semibold text-ink dark:text-ink mb-1.5 line-clamp-2 group-hover:text-coral-700 dark:group-hover:text-coral-400 transition-colors">{course.title}</h3>
+            <h3 className="font-display text-lg font-medium leading-snug text-ink mb-1.5 line-clamp-2 group-hover:text-coral-700 dark:group-hover:text-coral-400 transition-colors">{course.title}</h3>
             <p className="text-sm text-ink-secondary line-clamp-2 mb-4">{course.description}</p>
-            <div className="flex items-center gap-3 text-xs text-ink-tertiary mb-3">
-              <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" /> {course.lesson_count} lessons</span>
-              {course.estimated_duration_minutes && <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> {formatDuration(course.estimated_duration_minutes)}</span>}
-              <span className="flex items-center gap-1"><Users className="h-3 w-3" /> {formatNumber(course.enrollment_count)}</span>
+            <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-wide text-ink-tertiary mb-3">
+              <span className="flex items-center gap-1"><BookOpen className="h-3 w-3" aria-hidden="true" /> {course.lesson_count} lessons</span>
+              {course.estimated_duration_minutes && <span className="flex items-center gap-1"><Clock className="h-3 w-3" aria-hidden="true" /> {formatDuration(course.estimated_duration_minutes)}</span>}
+              <span className="flex items-center gap-1"><Users className="h-3 w-3" aria-hidden="true" /> {formatNumber(course.enrollment_count)}</span>
             </div>
             {course.skill_tags && course.skill_tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-1.5 mb-4">
                 {course.skill_tags.slice(0, 4).map(tag => <Badge key={tag} size="sm" variant="outline">{tag}</Badge>)}
                 {course.skill_tags.length > 4 && <Badge size="sm" variant="outline">+{course.skill_tags.length - 4}</Badge>}
               </div>
             )}
+            <span className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-coral-600 dark:text-coral-400 group-hover:gap-2.5 transition-all">
+              Review syllabus <ArrowRight className="h-3 w-3" aria-hidden="true" />
+            </span>
           </div>
         </Card>
       </Link>

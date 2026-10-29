@@ -40,7 +40,10 @@ export default function VerifyEmailPage() {
           </span>
         </Link>
 
-        <div className="rounded-3xl border border-border dark:border-white/5 bg-surface dark:bg-night-500 p-8">
+        <div className="rounded-xl border border-border dark:border-white/10 bg-surface dark:bg-night-500 p-8">
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400 mb-5">
+            {"// "}Account verification
+          </p>
           {status === "loading" && (
             <>
               <Loader2 className="h-8 w-8 animate-spin text-coral-500 mx-auto" />
@@ -49,10 +52,10 @@ export default function VerifyEmailPage() {
           )}
           {status === "success" && (
             <>
-              <div className="h-14 w-14 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+              <div className="h-14 w-14 rounded-lg bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
                 <CheckCircle2 className="h-7 w-7 text-emerald-500" />
               </div>
-              <h1 className="font-display text-2xl font-semibold text-ink">Email verified!</h1>
+              <h1 className="font-display text-2xl font-medium text-ink">Email verified!</h1>
               <p className="text-sm text-ink-secondary mt-2">Your account is now fully activated.</p>
               <Link href="/dashboard" className="block mt-6">
                 <Button className="w-full">Go to dashboard</Button>
@@ -61,10 +64,10 @@ export default function VerifyEmailPage() {
           )}
           {status === "error" && (
             <>
-              <div className="h-14 w-14 rounded-2xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+              <div className="h-14 w-14 rounded-lg bg-red-500/10 flex items-center justify-center mx-auto mb-4">
                 <XCircle className="h-7 w-7 text-red-500" />
               </div>
-              <h1 className="font-display text-2xl font-semibold text-ink">Verification failed</h1>
+              <h1 className="font-display text-2xl font-medium text-ink">Verification failed</h1>
               <p className="text-sm text-ink-secondary mt-2">{message}</p>
               <Link href="/login" className="block mt-6">
                 <Button variant="outline" className="w-full">Back to sign in</Button>

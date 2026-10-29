@@ -1,19 +1,19 @@
 import type { Config } from "tailwindcss";
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DSir Academy — editorial design tokens
+// DSir Academy — Obsidian Protocol editorial tokens
 //
 // Single source of truth for the design language. The `surface`, `ink` and
 // `border` families are theme-aware: they resolve to CSS variables defined in
 // globals.css, so the SAME class names automatically render the warm paper
-// palette in light mode and the calm deep-navy palette in dark mode.
+// palette in light mode and the obsidian palette in dark mode.
 //
-// Light reference (from the DSir Academy landing):
-//   paper #F4EFE6 · paper-light #FBF7EE · paper-dark #E8DEC9
-//   ink #0B1729 (deep navy) · muted #6E6A60 · coral #FF5C39
+// Dark (default, from the Stitch "Obsidian Protocol" spec):
+//   base #0B0F17 · card #111827 · elevated #1A2234
+//   borders #1F2937 / #374151 · text #F9FAFB / #9CA3AF / #6B7280
+//   electric coral #F95738 · indigo #6366F1 · terminal cyan #38BDF8
 //
-// Dark mode (default): deep near-black navy derived from ink, warm
-// paper-tinted text, coral used sparingly as the single accent.
+// Light: warm paper surfaces, deep navy ink, coral darkened for AA contrast.
 // ─────────────────────────────────────────────────────────────────────────────
 const config: Config = {
   content: ["./src/**/*.{js,ts,jsx,tsx,mdx}"],
@@ -29,31 +29,30 @@ const config: Config = {
           200: "#E8DEC9", // paper-dark
           300: "#D9D2C2", // deeper warm stone
         },
-        // Night ramp — calm deep-navy dark surfaces (never pure black).
-        // Matches the static landing page dark palette for seamless flow.
+        // Night ramp — obsidian dark surfaces (never pure black).
         night: {
-          100: "#e4e9f2", // primary text on dark — matches dm-text
-          200: "#96a3bd", // secondary text — matches dm-text-muted
-          300: "#232d42", // elevated / hover surface — matches dm-surface3
-          400: "#1a2236", // card surface — matches dm-surface2
-          500: "#111827", // secondary surface — matches dm-surface
-          600: "#080d18", // page background — matches dm-bg
-          700: "#060b14", // deeper wells / footer
-          800: "#040810", // deepest
+          100: "#F9FAFB", // primary text on dark
+          200: "#9CA3AF", // secondary text on dark
+          300: "#374151", // active border / hover chrome
+          400: "#1A2234", // elevated surface
+          500: "#111827", // card surface
+          600: "#0B0F17", // page background
+          700: "#080C13", // deeper wells / footer
+          800: "#05080E", // deepest
         },
-        // Coral — the single accent, used sparingly. Derived from #FF5C39.
+        // Electric coral — the single accent, used sparingly (#F95738).
         coral: {
-          50: "#FFF3EF",
-          100: "#FFE3DA",
-          200: "#FFC8B8",
-          300: "#FFA68C",
-          400: "#FF7E5C",
-          500: "#FF5C39", // signature accent
-          600: "#ED4A27",
-          700: "#C0391B", // AA-safe coral for text on paper (light mode)
-          800: "#9E2F16",
-          900: "#7C2411",
-          950: "#47130A",
+          50: "#FFF2EE",
+          100: "#FFE1D8",
+          200: "#FFC5B6",
+          300: "#FFA28B",
+          400: "#FC7757",
+          500: "#F95738", // signature accent
+          600: "#E24428",
+          700: "#B8301A", // AA-safe coral for text on paper (light mode)
+          800: "#992617",
+          900: "#7C1E12",
+          950: "#45100A",
         },
         // Muted warm gray for secondary copy (reference #6E6A60).
         muted: {
@@ -108,7 +107,15 @@ const config: Config = {
         128: "32rem",
       },
       borderRadius: {
-        "4xl": "2rem",
+        sm: "0.125rem",
+        DEFAULT: "0.25rem",
+        md: "0.375rem",
+        lg: "0.5rem",
+        xl: "0.625rem",
+        "2xl": "0.75rem",
+        "3xl": "0.875rem",
+        "4xl": "1rem",
+        full: "9999px",
       },
       letterSpacing: {
         eyebrow: "0.22em",

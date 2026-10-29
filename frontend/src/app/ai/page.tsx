@@ -5,7 +5,6 @@ import { useState, useRef, useEffect } from "react";
 import { ai as aiApi } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { PageLoader } from "@/components/ui/States";
 import {
   Sparkles, Send, Bot, User, Plus, MessageSquare,
@@ -76,30 +75,42 @@ export default function AIPage() {
 
   return (
     <div className="w-full min-w-0 space-y-6">
-      <div>
-        <p className="eyebrow mb-2">AI companions</p>
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink flex items-center gap-2">
-          <Sparkles className="h-8 w-8 text-coral-600 dark:text-coral-400" />
-          AI Assistant
-        </h1>
-        <p className="text-ink-secondary mt-1">Get help from AI tutors, reviewers, and mentors.</p>
-      </div>
+      <header className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400">
+            {"// "}No. 07 · Intelligent runtime
+          </p>
+          <h1 className="font-display text-3xl font-medium tracking-tight text-ink mt-2">
+            Kernel <span className="italic text-coral-600 dark:text-coral-400">Co-Pilot.</span>
+          </h1>
+          <p className="text-ink-secondary mt-1">Get help from AI tutors, reviewers, and mentors.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">
+          <span className="rounded-full border border-border dark:border-white/10 px-3 py-1.5 tabular-nums">
+            {assistants.length} engines
+          </span>
+          <span className="rounded-full border border-border dark:border-white/10 px-3 py-1.5 tabular-nums">
+            {conversations?.length ?? 0} threads
+          </span>
+        </div>
+      </header>
 
-      <div className="flex w-full min-w-0 flex-col md:flex-row gap-4 md:gap-6 h-[calc(100dvh-13rem)] min-h-[28rem]">
+      <div className="flex w-full min-w-0 flex-col md:flex-row gap-4 md:gap-6 h-[calc(100dvh-16rem)] min-h-[26rem] md:h-[calc(100dvh-14rem)]">
         {/* Sidebar - Conversations */}
         <div className="w-full md:w-72 md:flex-shrink-0 max-h-[45%] md:max-h-none min-h-0 border-b md:border-b-0 md:border-r border-border dark:border-white/10 pb-3 md:pb-0 md:pr-4 flex flex-col">
           {/* Assistant buttons */}
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-tertiary mb-2 px-1">{"// "}Engines</p>
           <div className="space-y-1 mb-4">
             {assistants.map((a) => (
               <button
                 key={a.type}
                 onClick={() => createConvMutation.mutate(a.type)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left transition-all text-ink-secondary hover:text-ink hover:bg-surface-secondary dark:hover:bg-white/5"
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors text-ink-secondary hover:text-ink hover:bg-surface-secondary dark:hover:bg-white/5"
               >
-                <a.icon className="h-4 w-4 flex-shrink-0" />
-                <div>
-                  <div className="font-medium">{a.label}</div>
-                  <div className="text-xs text-ink-tertiary">{a.desc}</div>
+                <a.icon className="h-4 w-4 flex-shrink-0 text-coral-600 dark:text-coral-400" />
+                <div className="min-w-0">
+                  <div className="font-medium truncate">{a.label}</div>
+                  <div className="text-xs text-ink-tertiary truncate">{a.desc}</div>
                 </div>
                 <Plus className="h-4 w-4 ml-auto flex-shrink-0" />
               </button>
@@ -108,6 +119,7 @@ export default function AIPage() {
 
           <div className="h-px bg-border dark:bg-white/10 my-2" />
 
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-tertiary mb-2 px-1 mt-2">{"// "}Threads</p>
           {/* Conversation list */}
           <div className="flex-1 overflow-y-auto space-y-1">
             {convLoading ? (
@@ -119,10 +131,10 @@ export default function AIPage() {
                 return (
                   <div
                     key={conv.id}
-                    className={`group flex items-center gap-2 rounded-xl transition-all ${
+                    className={`group flex items-center gap-2 rounded-lg border transition-colors ${
                       isActive
-                        ? "bg-coral-50 dark:bg-coral-500/10 text-coral-700 dark:text-coral-400"
-                        : "text-ink-secondary hover:bg-surface-secondary dark:hover:bg-white/5"
+                        ? "border-coral-500/30 bg-coral-50 dark:bg-coral-500/10 text-coral-700 dark:text-coral-400"
+                        : "border-transparent text-ink-secondary hover:bg-surface-secondary dark:hover:bg-white/5"
                     }`}
                   >
                     <button
@@ -152,7 +164,7 @@ export default function AIPage() {
                 );
               })
             ) : (
-              <div className="text-center text-sm text-ink-tertiary py-8">
+              <div className="text-center text-sm text-ink-tertiary py-8 px-3">
                 <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-40" />
                 Start a conversation with an AI assistant
               </div>
@@ -172,21 +184,21 @@ export default function AIPage() {
                     className={`flex gap-3 ${msg.role === "user" ? "justify-end" : ""}`}
                   >
                     {msg.role === "assistant" && (
-                      <div className="h-8 w-8 rounded-xl bg-coral-100 dark:bg-coral-500/10 flex items-center justify-center flex-shrink-0">
+                      <div className="h-8 w-8 rounded-md border border-coral-500/30 bg-coral-500/10 flex items-center justify-center flex-shrink-0">
                         <Bot className="h-4 w-4 text-coral-600 dark:text-coral-400" />
                       </div>
                     )}
                     <div
-                      className={`max-w-[70%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                      className={`max-w-[70%] rounded-lg px-4 py-3 text-sm leading-relaxed ${
                         msg.role === "user"
-                          ? "bg-coral-500 text-night-600 rounded-tr-md"
-                          : "bg-surface border border-border dark:border-white/10 text-ink rounded-tl-md"
+                          ? "bg-coral-500 text-night-600 rounded-tr-sm"
+                          : "bg-surface border border-border dark:border-white/10 text-ink rounded-tl-sm"
                       }`}
                     >
                       <div className="prose-lesson prose-sm" style={{ maxWidth: "none" }}>{msg.content}</div>
                     </div>
                     {msg.role === "user" && (
-                      <div className="h-8 w-8 rounded-xl bg-surface-secondary flex items-center justify-center flex-shrink-0">
+                      <div className="h-8 w-8 rounded-md border border-border dark:border-white/10 bg-surface-secondary flex items-center justify-center flex-shrink-0">
                         <User className="h-4 w-4 text-ink-tertiary" />
                       </div>
                     )}
@@ -194,10 +206,10 @@ export default function AIPage() {
                 ))}
                 {sending && (
                   <div className="flex gap-3">
-                    <div className="h-8 w-8 rounded-xl bg-coral-100 dark:bg-coral-500/10 flex items-center justify-center">
+                    <div className="h-8 w-8 rounded-md border border-coral-500/30 bg-coral-500/10 flex items-center justify-center">
                       <Bot className="h-4 w-4 text-coral-600 dark:text-coral-400 animate-pulse" />
                     </div>
-                    <div className="bg-surface border border-border dark:border-white/10 rounded-2xl rounded-tl-md px-4 py-3 text-sm">
+                    <div className="bg-surface border border-border dark:border-white/10 rounded-lg rounded-tl-sm px-4 py-3 text-sm">
                       <div className="flex gap-1">
                         <div className="h-1.5 w-1.5 rounded-full bg-ink-tertiary animate-bounce" />
                         <div className="h-1.5 w-1.5 rounded-full bg-ink-tertiary animate-bounce" style={{ animationDelay: "0.1s" }} />
@@ -218,7 +230,7 @@ export default function AIPage() {
                     onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
                     placeholder={`Ask ${assistants.find((a) => a.type === activeConversation?.assistant_type)?.label || "the AI"}...`}
                     aria-label="Message the AI assistant"
-                    className="flex-1 h-12 px-4 rounded-xl border border-border dark:border-white/10 bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-coral-500 placeholder:text-ink-tertiary"
+                    className="flex-1 h-12 px-4 rounded-lg border border-border dark:border-white/10 bg-surface text-ink text-sm focus:outline-none focus:ring-2 focus:ring-coral-500 placeholder:text-ink-tertiary"
                   />
                   <Button
                     size="lg"
@@ -235,8 +247,13 @@ export default function AIPage() {
           ) : (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center max-w-md">
-                <Sparkles className="h-16 w-16 text-coral-500 mx-auto mb-6" />
-                <h2 className="font-display text-2xl font-semibold text-ink mb-2">Your AI Learning Partner</h2>
+                <div className="h-14 w-14 rounded-xl border border-coral-500/30 bg-coral-500/10 flex items-center justify-center mx-auto mb-5">
+                  <Sparkles className="h-7 w-7 text-coral-600 dark:text-coral-400" />
+                </div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-tertiary mb-2">
+                  {"// "}Session idle
+                </p>
+                <h2 className="font-display text-2xl font-medium text-ink mb-2">Your AI Learning Partner</h2>
                 <p className="text-ink-secondary mb-8">
                   Choose an assistant to get started. Get help with concepts, code reviews, debugging, and career advice.
                 </p>
@@ -245,7 +262,7 @@ export default function AIPage() {
                     <button
                       key={a.type}
                       onClick={() => createConvMutation.mutate(a.type)}
-                      className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-border dark:border-white/10 hover:border-coral-400/60 dark:hover:border-coral-500/40 hover:bg-coral-50/40 dark:hover:bg-coral-500/5 transition-all text-center"
+                      className="flex flex-col items-center gap-2 p-4 rounded-lg border border-border dark:border-white/10 hover:border-coral-400/60 dark:hover:border-coral-500/40 hover:bg-coral-50/40 dark:hover:bg-coral-500/5 transition-colors text-center"
                     >
                       <a.icon className="h-6 w-6 text-coral-600 dark:text-coral-400" />
                       <span className="text-sm font-medium text-ink">{a.label}</span>

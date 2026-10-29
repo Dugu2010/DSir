@@ -8,31 +8,31 @@
      Dark  = deep near-black navy derived from ink, warm paper text,
              coral accent. Dark is the DEFAULT experience. */
   :root {
-    --surface: 251 247 238; /* paper-light #FBF7EE */
-    --surface-secondary: 244 239 230; /* paper #F4EFE6 */
-    --surface-tertiary: 232 222 201; /* paper-dark #E8DEC9 */
+    --surface: 255 253 248; /* clean paper white */
+    --surface-secondary: 247 244 237; /* warm paper #F7F4ED */
+    --surface-tertiary: 241 236 225; /* muted paper #F1ECE1 */
     --ink: 11 23 41; /* deep navy #0B1729 */
-    --ink-secondary: 92 88 80; /* warm muted */
-    --ink-tertiary: 133 128 118; /* warm stone */
+    --ink-secondary: 82 79 71; /* warm graphite */
+    --ink-tertiary: 122 116 104; /* warm stone */
     --ink-inverse: 255 255 255;
-    --border: 217 210 194; /* #D9D2C2 */
-    --border-light: 232 222 201; /* paper-dark */
-    --toast-bg: #FBF7EE;
+    --border: 227 220 205; /* #E3DCCD */
+    --border-light: 203 195 178; /* stronger outline #CBC3B2 */
+    --toast-bg: #FFFDF8;
     --toast-color: #0B1729;
   }
 
   .dark {
-    --surface: 17 24 39;           /* #111827 card surface — matches landing dm-surface */
-    --surface-secondary: 8 13 24;  /* #080d18 page bg — matches landing dm-bg */
-    --surface-tertiary: 26 34 54;  /* #1a2236 elevated — matches landing dm-surface2 */
-    --ink: 228 233 242;            /* #e4e9f2 primary text — matches landing dm-text */
-    --ink-secondary: 150 163 189;  /* #96a3bd secondary — matches landing dm-text-muted */
-    --ink-tertiary: 100 112 138;   /* #64708a tertiary — matches landing dm-text-dim */
-    --ink-inverse: 8 13 24;        /* #080d18 — text on coral/accent */
-    --border: 42 53 80;            /* #2a3550 — matches landing dm-border */
-    --border-light: 31 42 61;      /* #1f2a3d — matches landing dm-border-sub */
+    --surface: 17 24 39;           /* #111827 card surface */
+    --surface-secondary: 11 15 23; /* #0B0F17 page background */
+    --surface-tertiary: 26 34 52;  /* #1A2234 elevated */
+    --ink: 249 250 251;            /* #F9FAFB primary text */
+    --ink-secondary: 156 163 175;  /* #9CA3AF secondary */
+    --ink-tertiary: 107 114 128;   /* #6B7280 muted */
+    --ink-inverse: 255 255 255;
+    --border: 31 41 55;            /* #1F2937 subtle outline */
+    --border-light: 55 65 81;      /* #374151 active outline */
     --toast-bg: #111827;
-    --toast-color: #e4e9f2;
+    --toast-color: #F9FAFB;
   }
 
   html {
@@ -74,10 +74,10 @@
     height: 6px;
   }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #c9c2b2; border-radius: 9999px; }
-  .dark ::-webkit-scrollbar-thumb { background: #2A3552; }
+  ::-webkit-scrollbar-thumb { background: #cbc3b2; border-radius: 9999px; }
+  .dark ::-webkit-scrollbar-thumb { background: #2a3343; }
   ::-webkit-scrollbar-thumb:hover { background: #b3ab97; }
-  .dark ::-webkit-scrollbar-thumb:hover { background: #3A4A75; }
+  .dark ::-webkit-scrollbar-thumb:hover { background: #374151; }
 
   /* Respect users who prefer reduced motion */
   @media (prefers-reduced-motion: reduce) {
@@ -132,10 +132,10 @@
   .prose-lesson ul, .prose-lesson ol { @apply mb-4 pl-6; }
   .prose-lesson li { @apply mb-1 text-ink-secondary dark:text-ink-secondary list-disc; }
   .prose-lesson ol li { @apply list-decimal; }
-  .prose-lesson code { @apply bg-surface-tertiary text-coral-700 dark:bg-white/10 dark:text-coral-400 px-1.5 py-0.5 rounded-md text-sm font-mono; }
-  .prose-lesson pre { @apply bg-night-700 dark:bg-night-800 p-5 rounded-2xl overflow-x-auto mb-6 border border-border dark:border-white/10; }
+  .prose-lesson code { @apply bg-surface-tertiary text-coral-700 dark:bg-night-500 dark:text-coral-400 px-1.5 py-0.5 rounded text-sm font-mono; }
+  .prose-lesson pre { @apply bg-night-700 dark:bg-night-800 p-5 rounded-xl overflow-x-auto mb-6 border border-border dark:border-white/10; }
   .prose-lesson pre code { @apply bg-transparent text-inherit p-0 text-[13px] leading-relaxed; }
-  .prose-lesson blockquote { @apply border-l-4 border-coral-500 pl-4 py-1.5 mb-4 text-ink-secondary dark:text-ink-secondary italic bg-coral-50/60 dark:bg-coral-500/5 rounded-r-lg; }
+  .prose-lesson blockquote { @apply border-l-2 border-coral-500 pl-4 py-1.5 mb-4 text-ink-secondary dark:text-ink-secondary italic bg-coral-50/60 dark:bg-coral-500/5 rounded-r-lg; }
   .prose-lesson a { @apply text-coral-700 dark:text-coral-400 hover:underline font-medium; }
   .prose-lesson strong { @apply font-semibold text-ink dark:text-ink; }
   .prose-lesson hr { @apply my-8 border-border dark:border-white/10; }
@@ -143,8 +143,8 @@
   .prose-lesson th { @apply text-left font-semibold p-3 border-b-2 border-border dark:border-white/10 bg-surface-tertiary; }
   .prose-lesson td { @apply p-3 border-b border-border dark:border-white/5; }
 
-  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #c9c2b2 transparent; }
-  .dark .scrollbar-thin { scrollbar-color: #2A3552 transparent; }
+  .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #cbc3b2 transparent; }
+  .dark .scrollbar-thin { scrollbar-color: #2a3343 transparent; }
   .scrollbar-thin::-webkit-scrollbar { width: 5px; }
 }
 

@@ -3,10 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { quizzes } from "@/lib/api";
-import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { PageLoader, EmptyState, ErrorState } from "@/components/ui/States";
-import { ClipboardList, ChevronRight, Timer, HelpCircle, Award } from "lucide-react";
+import { ClipboardList, ArrowRight } from "lucide-react";
 import type { QuizListItem } from "@/lib/types";
 
 export default function QuizzesPage() {
@@ -27,19 +25,52 @@ export default function QuizzesPage() {
   }
 
   const items: QuizListItem[] = data.items;
+  const totalQuestions = items.reduce((sum, quiz) => sum + quiz.question_count, 0);
+  const averagePass = items.length
+    ? Math.round(items.reduce((sum, quiz) => sum + quiz.passing_score, 0) / items.length)
+    : 0;
+  const timedQuizzes = items.filter((quiz) => !!quiz.time_limit_minutes).length;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
-      <div>
-        <p className="eyebrow mb-2">Assessment</p>
-        <h1 className="font-display text-3xl font-semibold tracking-tight text-ink flex items-center gap-2">
-          <ClipboardList className="h-8 w-8 text-coral-500" />
-          Quizzes
-        </h1>
-        <p className="text-ink-secondary mt-1">
-          Test your knowledge. Attempts are limited, and retakes only earn XP when you beat your best score.
-        </p>
-      </div>
+      <header className="relative overflow-hidden rounded-xl border border-border dark:border-white/10 bg-surface dark:bg-night-500">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-coral-500/60 to-transparent" aria-hidden="true" />
+        <div className="p-6 md:p-8">
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400">
+            {"// "}No. 05 · Assessments &amp; benchmarks
+          </p>
+          <h1 className="font-display text-3xl md:text-5xl font-medium tracking-tight leading-[1.08] text-ink mt-3">
+            Quizzes &amp; Skill{" "}
+            <span className="italic text-coral-600 dark:text-coral-400">Benchmarks.</span>
+          </h1>
+          <p className="text-ink-secondary mt-3 max-w-2xl">
+            Test your knowledge under a fixed clock. Attempts are limited, and retakes only earn XP
+            when you beat your best score.
+          </p>
+        </div>
+        {items.length > 0 && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-px bg-border dark:bg-white/10 border-t border-border dark:border-white/10">
+            {[
+              { label: "Catalog", value: `${items.length}`, suffix: "quizzes" },
+              { label: "Depth", value: `${totalQuestions}`, suffix: "questions" },
+              { label: "Pass mark", value: `${averagePass}%`, suffix: "average" },
+              { label: "Timed", value: `${timedQuizzes}`, suffix: `of ${items.length}` },
+            ].map((stat) => (
+              <div key={stat.label} className="bg-surface dark:bg-night-500 px-5 py-4">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-tertiary">
+                  {stat.label}
+                </p>
+                <p className="font-display text-2xl font-medium text-ink mt-1 tabular-nums">
+                  {stat.value}
+                </p>
+                <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">
+                  {stat.suffix}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </header>
 
       {items.length === 0 ? (
         <EmptyState
@@ -48,43 +79,69 @@ export default function QuizzesPage() {
           icon={<ClipboardList className="h-8 w-8" />}
         />
       ) : (
-        <div className="grid sm:grid-cols-2 gap-4">
-          {items.map((quiz) => (
-            <Link key={quiz.id} href={`/quizzes/${quiz.id}`}>
-              <Card hover padding="md" className="h-full">
-                <div className="flex items-start justify-between mb-3">
-                  <Badge variant="outline" size="sm">{quiz.question_count} questions</Badge>
-                  <Badge size="sm" className="bg-coral-500/10 text-coral-700 dark:text-coral-400 border border-coral-500/30">
-                    Pass {quiz.passing_score}%
-                  </Badge>
-                </div>
-                <h3 className="font-display font-semibold text-ink mb-1">{quiz.title}</h3>
-                <p className="text-sm text-ink-secondary line-clamp-2 mb-3">{quiz.description}</p>
-                {quiz.course_title && (
-                  <p className="text-xs font-mono text-ink-tertiary mb-2">{quiz.course_title}</p>
-                )}
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-tertiary">
-                  <span className="flex items-center gap-1">
-                    <HelpCircle className="h-3.5 w-3.5" /> {quiz.question_count} Qs
-                  </span>
-                  {quiz.time_limit_minutes && (
-                    <span className="flex items-center gap-1">
-                      <Timer className="h-3.5 w-3.5" /> {quiz.time_limit_minutes} min
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-tertiary">
+              {"// "}All assessments
+            </p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-tertiary">
+              {String(items.length).padStart(2, "0")} tracks
+            </p>
+          </div>
+          <div className="rounded-xl border border-border dark:border-white/10 bg-surface dark:bg-night-500 divide-y divide-border dark:divide-white/10 overflow-hidden">
+            {items.map((quiz, index) => (
+              <Link
+                key={quiz.id}
+                href={`/quizzes/${quiz.id}`}
+                className="group grid gap-4 p-5 sm:p-6 sm:grid-cols-[1fr_auto] sm:items-start hover:bg-surface-secondary dark:hover:bg-white/[0.03] transition-colors"
+              >
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-coral-600 dark:text-coral-400">
+                      Track // {String(index + 1).padStart(2, "0")}
                     </span>
+                    {quiz.course_title && (
+                      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary truncate">
+                        {quiz.course_title}
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="font-display text-lg sm:text-xl font-medium text-ink leading-snug group-hover:text-coral-700 dark:group-hover:text-coral-400 transition-colors">
+                    {quiz.title}
+                  </h3>
+                  {quiz.description && (
+                    <p className="text-sm text-ink-secondary mt-1 line-clamp-2">{quiz.description}</p>
                   )}
-                  {quiz.max_attempts ? (
-                    <span className="flex items-center gap-1">
-                      <Award className="h-3.5 w-3.5" /> {quiz.max_attempts} attempts
-                    </span>
-                  ) : null}
-                  <span className="flex items-center gap-1 text-coral-600 dark:text-coral-400 font-medium ml-auto">
-                    Start <ChevronRight className="h-3.5 w-3.5" />
-                  </span>
+                  <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-3 mt-4">
+                    <div>
+                      <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">Length</dt>
+                      <dd className="text-sm text-ink mt-0.5 tabular-nums">{quiz.question_count} questions</dd>
+                    </div>
+                    <div>
+                      <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">Timer</dt>
+                      <dd className="text-sm text-ink mt-0.5 tabular-nums">
+                        {quiz.time_limit_minutes ? `${quiz.time_limit_minutes} min` : "Untimed"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">Pass mark</dt>
+                      <dd className="text-sm text-ink mt-0.5 tabular-nums">{quiz.passing_score}%</dd>
+                    </div>
+                    <div>
+                      <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">Quota</dt>
+                      <dd className="text-sm text-ink mt-0.5 tabular-nums">
+                        {quiz.max_attempts ? `${quiz.max_attempts} attempts` : "Unlimited"}
+                      </dd>
+                    </div>
+                  </dl>
                 </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
+                <span className="inline-flex items-center gap-1.5 self-end sm:self-center font-mono text-[11px] uppercase tracking-[0.14em] text-coral-600 dark:text-coral-400 group-hover:gap-2.5 transition-all shrink-0">
+                  Start quiz <ArrowRight className="h-3.5 w-3.5" />
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
       )}
     </div>
   );

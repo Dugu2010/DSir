@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { useAuth } from "@/lib/auth";
 import { auth as authApi } from "@/lib/api";
 import { useTheme } from "@/lib/theme";
-import { Settings, User, Bell, Palette, Shield, Check } from "lucide-react";
+import { Bell, Palette, Shield, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import toast from "react-hot-toast";
 
@@ -48,23 +48,23 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
-      <div className="relative overflow-hidden rounded-3xl bg-ink dark:bg-night-500 border border-border dark:border-white/5 p-8 text-paper-50 dark:text-ink">
-        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-coral-500/60 to-transparent" aria-hidden="true" />
-        <p className="eyebrow mb-2 !text-coral-400">Preferences</p>
-        <h1 className="font-display text-3xl font-semibold tracking-tight flex items-center gap-2">
-          <Settings className="h-7 w-7" />
-          Settings
-        </h1>
-        <p className="text-paper-50/70 dark:text-ink-secondary mt-1">Manage your account and preferences.</p>
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400">
+          {"// "}No. 15 · System preferences
+        </p>
+        <h1 className="font-display text-3xl md:text-4xl font-medium tracking-tight text-ink mt-2">Settings</h1>
+        <p className="text-ink-secondary mt-1">Manage your account and preferences.</p>
       </div>
 
       <div className="grid gap-6">
         {/* Appearance */}
         <Card padding="md">
-          <div className="flex items-center gap-3 mb-4">
-            <Palette className="h-5 w-5 text-coral-600 dark:text-coral-400" />
-            <h2 className="font-display text-lg font-semibold text-ink">Appearance</h2>
-          </div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-coral-600 dark:text-coral-400 mb-1">
+            {"// "}Appearance
+          </p>
+          <h2 className="font-display text-lg font-medium text-ink mb-4 flex items-center gap-2">
+            <Palette className="h-4 w-4 text-ink-tertiary" /> Theme
+          </h2>
           <div className="flex flex-wrap gap-3" role="group" aria-label="Color theme">
             {(["light", "dark", "system"] as const).map((t) => (
               <button
@@ -72,7 +72,7 @@ export default function SettingsPage() {
                 onClick={() => setTheme(t)}
                 aria-pressed={theme === t}
                 className={cn(
-                  "flex items-center gap-1.5 px-4 py-2 rounded-xl border text-sm font-medium transition-all capitalize",
+                  "flex items-center gap-1.5 px-4 py-2 rounded-lg border text-sm font-medium transition-colors capitalize",
                   theme === t
                     ? "border-coral-500 bg-coral-50 text-coral-700 dark:bg-coral-500/10 dark:text-coral-400"
                     : "border-border dark:border-white/10 text-ink-secondary hover:text-ink hover:border-coral-400/50 dark:hover:border-coral-500/40"
@@ -87,17 +87,19 @@ export default function SettingsPage() {
 
         {/* Notifications */}
         <Card padding="md">
-          <div className="flex items-center gap-3 mb-4">
-            <Bell className="h-5 w-5 text-coral-600 dark:text-coral-400" />
-            <h2 className="font-display text-lg font-semibold text-ink">Notifications</h2>
-          </div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-coral-600 dark:text-coral-400 mb-1">
+            {"// "}Notifications
+          </p>
+          <h2 className="font-display text-lg font-medium text-ink mb-4 flex items-center gap-2">
+            <Bell className="h-4 w-4 text-ink-tertiary" /> Delivery channels
+          </h2>
           <div className="space-y-3">
             {[
               { label: "Email notifications", desc: "Receive course updates and reminders" },
               { label: "Push notifications", desc: "Get notified in your browser" },
               { label: "Weekly digest", desc: "Summary of your weekly progress" },
             ].map((item) => (
-              <div key={item.label} className="flex items-center justify-between py-2">
+              <div key={item.label} className="flex items-center justify-between py-2 gap-4">
                 <div>
                   <p className="text-sm font-medium text-ink">{item.label}</p>
                   <p className="text-xs text-ink-tertiary">{item.desc}</p>
@@ -113,10 +115,12 @@ export default function SettingsPage() {
 
         {/* Security */}
         <Card padding="md">
-          <div className="flex items-center gap-3 mb-4">
-            <Shield className="h-5 w-5 text-coral-600 dark:text-coral-400" />
-            <h2 className="font-display text-lg font-semibold text-ink">Security</h2>
-          </div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-coral-600 dark:text-coral-400 mb-1">
+            {"// "}Security
+          </p>
+          <h2 className="font-display text-lg font-medium text-ink mb-4 flex items-center gap-2">
+            <Shield className="h-4 w-4 text-ink-tertiary" /> Password
+          </h2>
           <div className="space-y-4">
             <Input label="Current Password" type="password" placeholder="Enter current password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
             <Input label="New Password" type="password" placeholder="Enter new password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
@@ -125,11 +129,14 @@ export default function SettingsPage() {
           </div>
         </Card>
 
-        {/* Danger Zone */}
-        <Card padding="md" className="border-red-200 dark:border-red-500/20">
-          <div className="flex items-center justify-between">
+        {/* Session */}
+        <Card padding="md">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 className="font-display font-semibold text-red-600 dark:text-red-400">Sign Out</h2>
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-coral-600 dark:text-coral-400 mb-1">
+                {"// "}Session
+              </p>
+              <h2 className="font-display font-medium text-ink">Sign out</h2>
               <p className="text-sm text-ink-tertiary mt-1">Sign out of DSir on this device.</p>
             </div>
             <Button

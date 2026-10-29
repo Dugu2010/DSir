@@ -49,20 +49,22 @@ export default function ResetPasswordPage() {
           </span>
         </Link>
 
-        <div className="rounded-3xl border border-border dark:border-white/5 bg-surface dark:bg-night-500 p-8">
+        <div className="rounded-xl border border-border dark:border-white/10 bg-surface dark:bg-night-500 p-8">
           {done ? (
             <div className="text-center">
-              <div className="h-14 w-14 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+              <div className="h-14 w-14 rounded-lg bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
                 <CheckCircle2 className="h-7 w-7 text-emerald-500" />
               </div>
-              <h1 className="font-display text-2xl font-semibold text-ink">Password reset!</h1>
+              <h1 className="font-display text-2xl font-medium text-ink">Password reset!</h1>
               <p className="text-sm text-ink-secondary mt-2">You can now sign in with your new password.</p>
               <Button className="mt-6 w-full" onClick={() => router.push("/login")}>Go to sign in</Button>
             </div>
           ) : (
             <>
-              <p className="eyebrow mb-4">New password</p>
-              <h1 className="font-display text-2xl font-semibold text-ink">Reset your password</h1>
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400 mb-4">
+                {"// "}New password
+              </p>
+              <h1 className="font-display text-2xl font-medium text-ink">Reset your password</h1>
               <p className="text-sm text-ink-secondary mt-2">Choose a strong new password (min 8 characters).</p>
               {error && <p className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</p>}
               {!token && <p className="mt-4 text-sm text-red-600 dark:text-red-400">Missing or invalid reset token.</p>}

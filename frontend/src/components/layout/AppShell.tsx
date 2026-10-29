@@ -10,7 +10,7 @@ import { useTheme } from "@/lib/theme";
 import {
   LayoutDashboard, BookOpen, Code2, Brain, Sparkles,
   Trophy, BookMarked, Settings, LogOut, Menu, X, Bell,
-  GraduationCap, Sun, Moon, User, ChevronLeft,
+  GraduationCap, Sun, Moon, User,
   ClipboardList, FolderKanban, BarChart3, MessagesSquare,
 } from "lucide-react";
 import { useState, useCallback, useEffect } from "react";
@@ -71,7 +71,7 @@ function isProtected(pathname: string): boolean {
 }
 
 const navLinkBase =
-  "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors duration-150";
+  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors duration-150";
 
 function NavLink({
   href,
@@ -94,13 +94,13 @@ function NavLink({
       className={cn(
         navLinkBase,
         isActive
-          ? "bg-coral-50 text-coral-700 dark:bg-coral-500/10 dark:text-coral-400"
+          ? "bg-surface-tertiary text-ink dark:bg-night-400 dark:text-ink font-semibold"
           : "text-ink-secondary dark:text-ink-tertiary hover:text-ink dark:hover:text-ink hover:bg-surface-tertiary dark:hover:bg-white/5"
       )}
     >
-      <Icon className={cn("h-5 w-5 flex-shrink-0", isActive && "text-coral-600 dark:text-coral-400")} />
+      <Icon className={cn("h-[18px] w-[18px] flex-shrink-0", isActive && "text-coral-500")} />
       {label}
-      {isActive && <ChevronLeft className="h-4 w-4 ml-auto rotate-180 text-coral-500" aria-hidden="true" />}
+      {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-coral-500" aria-hidden="true" />}
     </Link>
   );
 }
@@ -152,7 +152,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-surface-secondary dark:bg-night-600 transition-colors duration-300">
       <a
         href="#main-content"
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-coral-500 focus:text-night-600 focus:text-sm focus:font-medium"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-4 focus:py-2 focus:rounded-lg focus:bg-coral-500 focus:text-white focus:text-sm focus:font-medium"
       >
         Skip to main content
       </a>
@@ -169,7 +169,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed top-0 left-0 z-50 h-full w-64 bg-surface dark:bg-night-500 border-r border-border dark:border-white/5",
+          "fixed top-0 left-0 z-50 h-full w-64 bg-surface border-r border-border",
           "transform transition-transform duration-200 ease-in-out",
           "lg:translate-x-0 shadow-none",
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
@@ -178,13 +178,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="flex items-center justify-between h-16 px-6 border-b border-border dark:border-white/5">
+          <div className="flex items-center justify-between h-16 px-5 border-b border-border">
             <Link href="/dashboard" className="flex items-center gap-2.5 group">
-              <div className="h-8 w-8 rounded-lg bg-ink dark:bg-paper-50 flex items-center justify-center border border-border dark:border-white/10">
-                <GraduationCap className="h-4 w-4 text-coral-500" aria-hidden="true" />
+              <div className="h-8 w-8 rounded-lg bg-coral-500 flex items-center justify-center">
+                <GraduationCap className="h-4 w-4 text-white" aria-hidden="true" />
               </div>
-              <span className="font-display font-bold text-lg text-ink dark:text-ink tracking-tight">
-                DSir <span className="font-mono text-[10px] uppercase tracking-eyebrow text-coral-500 align-middle ml-0.5">Academy</span>
+              <span className="flex flex-col leading-none">
+                <span className="font-display font-semibold text-base text-ink tracking-tight">
+                  DSir Academy
+                </span>
+                <span className="font-mono text-[9px] uppercase tracking-[0.18em] text-coral-500 mt-1">
+                  Obsidian
+                </span>
               </span>
             </Link>
             <button
@@ -214,7 +219,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             })}
 
             <div className="pt-4 pb-2">
-              <div className="h-px bg-border dark:bg-white/5 mx-3" />
+              <div className="h-px bg-border mx-3" />
             </div>
 
             <p className="px-3 pt-1 pb-2 text-2xs font-mono font-bold text-ink-tertiary uppercase tracking-eyebrow">Library</p>
@@ -236,7 +241,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {user && (user.role === "admin" || user.role === "superadmin") && (
               <>
                 <div className="pt-4 pb-2">
-                  <div className="h-px bg-border dark:bg-white/5 mx-3" />
+                  <div className="h-px bg-border mx-3" />
                   <p className="px-3 pt-3 text-2xs font-mono font-bold text-coral-600 dark:text-coral-400 uppercase tracking-eyebrow">Admin</p>
                 </div>
                 {adminItems.map((item) => {
@@ -258,9 +263,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* User */}
           {user && (
-            <div className="p-3 border-t border-border dark:border-white/5">
-              <div className="flex items-center gap-3 px-3 py-2 rounded-xl">
-                <div className="h-9 w-9 rounded-full bg-ink dark:bg-paper-50 border border-border dark:border-white/10 flex items-center justify-center text-coral-500 font-semibold text-sm flex-shrink-0">
+            <div className="p-3 border-t border-border">
+              <div className="flex items-center gap-3 px-2 py-2 rounded-lg">
+                <div className="h-9 w-9 rounded-full bg-coral-500/10 border border-coral-500/30 flex items-center justify-center text-coral-500 font-semibold text-sm flex-shrink-0">
                   {user.display_name?.[0]?.toUpperCase() || "U"}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -284,7 +289,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="lg:pl-64 flex flex-col min-h-screen">
         {/* Top bar */}
-        <header className="sticky top-0 z-30 h-16 bg-surface/85 dark:bg-night-500/85 backdrop-blur-xl border-b border-border dark:border-white/5 flex items-center justify-between px-4 lg:px-8 gap-4">
+        <header className="sticky top-0 z-30 h-16 bg-surface-secondary/80 dark:bg-night-600/80 backdrop-blur-xl border-b border-border flex items-center justify-between px-4 lg:px-8 gap-4">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 -ml-2 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink dark:text-ink"
@@ -304,9 +309,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-label={resolvedTheme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
             >
               {resolvedTheme === "dark" ? (
-                <Sun className="h-4.5 w-4.5" aria-hidden="true" />
+                <Sun className="h-[18px] w-[18px]" aria-hidden="true" />
               ) : (
-                <Moon className="h-4.5 w-4.5" aria-hidden="true" />
+                <Moon className="h-[18px] w-[18px]" aria-hidden="true" />
               )}
             </button>
 
@@ -315,9 +320,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className="relative p-2 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary dark:text-ink-tertiary transition-colors"
               aria-label={unreadCount > 0 ? `${unreadCount} unread notifications` : "Notifications"}
             >
-              <Bell className="h-4.5 w-4.5" aria-hidden="true" />
+              <Bell className="h-[18px] w-[18px]" aria-hidden="true" />
               {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-coral-500 text-night-600 text-[10px] font-bold flex items-center justify-center ring-2 ring-surface dark:ring-night-500">
+                <span className="absolute top-1 right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-coral-500 text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-surface-secondary dark:ring-night-600">
                   {unreadCount > 9 ? "9+" : unreadCount}
                 </span>
               )}
@@ -327,7 +332,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className="p-2 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary dark:text-ink-tertiary transition-colors"
               aria-label="Your profile"
             >
-              <User className="h-4.5 w-4.5" aria-hidden="true" />
+              <User className="h-[18px] w-[18px]" aria-hidden="true" />
             </Link>
           </div>
         </header>

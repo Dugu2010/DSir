@@ -61,51 +61,75 @@ export default function ProjectDetailPage() {
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <div className="flex-1">
-          <p className="eyebrow mb-1">Project</p>
-          <h1 className="font-display text-2xl font-semibold text-ink flex items-center gap-2">
-            <FolderKanban className="h-6 w-6 text-coral-500" />
-            {p.title}
-          </h1>
-        </div>
-        <Badge size="sm" className={difficultyColor(p.difficulty)}>{p.difficulty}</Badge>
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400">
+          — Project dossier —
+        </p>
       </div>
 
-      {p.is_capstone && (
-        <div className="flex items-center gap-2 text-amber-500 text-sm font-medium">
-          <Star className="h-4 w-4 fill-current" /> Capstone project
-          {p.estimated_duration_hours && (
-            <span className="flex items-center gap-1 text-ink-tertiary font-normal ml-2">
-              <Clock className="h-3.5 w-3.5" /> ~{p.estimated_duration_hours}h
+      <header className="relative overflow-hidden rounded-xl border border-border dark:border-white/10 bg-surface dark:bg-night-500">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-coral-500/60 to-transparent" aria-hidden="true" />
+        <div className="p-6 md:p-8">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-tertiary flex items-center gap-1.5">
+                <FolderKanban className="h-3.5 w-3.5 text-coral-500" /> Applied build
+              </p>
+              <h1 className="font-display text-2xl md:text-3xl font-medium tracking-tight leading-snug text-ink mt-2">
+                {p.title}
+              </h1>
+            </div>
+            <Badge size="sm" className={difficultyColor(p.difficulty)}>{p.difficulty}</Badge>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-4 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">
+            {p.is_capstone && (
+              <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400">
+                <Star className="h-3.5 w-3.5 fill-current" /> Capstone project
+              </span>
+            )}
+            {p.estimated_duration_hours && (
+              <span className="flex items-center gap-1 tabular-nums">
+                <Clock className="h-3.5 w-3.5" /> ~{p.estimated_duration_hours}h
+              </span>
+            )}
+            <span className="flex items-center gap-1 tabular-nums">
+              <FolderKanban className="h-3.5 w-3.5" /> {fileNames.length} starter files
             </span>
-          )}
+          </div>
         </div>
-      )}
+      </header>
 
       <Card padding="md">
-        <h2 className="font-display font-semibold text-ink mb-2">Description</h2>
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-coral-600 dark:text-coral-400 mb-1">
+          {"// "}Project brief
+        </p>
+        <h2 className="font-display text-lg font-medium text-ink mb-2">Description</h2>
         <p className="text-sm text-ink-secondary leading-relaxed">{p.description}</p>
-        <h2 className="font-display font-semibold text-ink mt-6 mb-2">Requirements</h2>
+        <h2 className="font-display text-lg font-medium text-ink mt-6 mb-2">Requirements</h2>
         <pre className="text-sm text-ink-secondary whitespace-pre-wrap font-sans leading-relaxed">{p.requirements}</pre>
       </Card>
 
       {/* Code editor */}
       <Card padding="none" className="overflow-hidden">
         <div className="flex items-center border-b border-border dark:border-white/10 px-3">
-          {fileNames.map((name) => (
-            <button
-              key={name}
-              onClick={() => setActiveFile(name)}
-              className={cn(
-                "px-3 py-2.5 text-sm font-mono border-b-2 transition-colors",
-                activeFile === name
-                  ? "border-coral-500 text-ink"
-                  : "border-transparent text-ink-tertiary hover:text-ink",
-              )}
-            >
-              {name}
-            </button>
-          ))}
+          <span className="hidden sm:inline font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary pr-3 mr-1 border-r border-border dark:border-white/10">
+            Files
+          </span>
+          <div className="flex items-center overflow-x-auto">
+            {fileNames.map((name) => (
+              <button
+                key={name}
+                onClick={() => setActiveFile(name)}
+                className={cn(
+                  "px-3 py-2.5 text-sm font-mono border-b-2 transition-colors whitespace-nowrap",
+                  activeFile === name
+                    ? "border-coral-500 text-ink"
+                    : "border-transparent text-ink-tertiary hover:text-ink",
+                )}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
         </div>
         {activeFile && (
           <textarea
@@ -118,8 +142,10 @@ export default function ProjectDetailPage() {
         )}
       </Card>
 
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-ink-tertiary">Your submission will be reviewed and scored.</p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">
+          Submission is reviewed and scored
+        </p>
         {submitted ? (
           <div className="flex items-center gap-2 text-emerald-500 text-sm font-medium">
             <CheckCircle className="h-5 w-5" /> Submitted for review

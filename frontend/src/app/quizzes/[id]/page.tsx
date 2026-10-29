@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { quizzes } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { PageLoader, ErrorState } from "@/components/ui/States";
 import {
@@ -229,36 +228,42 @@ export default function QuizPage() {
     const attemptsLeft = result.attempts_remaining;
     return (
       <div className="max-w-2xl mx-auto space-y-6">
-        <div className="text-center py-8">
+        <div className="relative overflow-hidden rounded-xl border border-border dark:border-white/10 bg-surface dark:bg-night-500 text-center px-6 py-10">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-coral-500/60 to-transparent" aria-hidden="true" />
           <div className={cn(
-            "h-20 w-20 rounded-3xl flex items-center justify-center mx-auto mb-4",
-            result.passed ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-500",
+            "h-16 w-16 rounded-xl border flex items-center justify-center mx-auto mb-4",
+            result.passed
+              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+              : "border-red-500/30 bg-red-500/10 text-red-500",
           )}>
-            {result.passed ? <Trophy className="h-10 w-10" /> : <XCircle className="h-10 w-10" />}
+            {result.passed ? <Trophy className="h-8 w-8" /> : <XCircle className="h-8 w-8" />}
           </div>
-          <h1 className="font-display text-3xl font-semibold text-ink">
-            {result.passed ? "You passed!" : "Not quite yet"}
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400">
+            {"// "}Assessment graded
+          </p>
+          <h1 className="font-display text-3xl font-medium text-ink mt-2">
+            {result.passed ? "You passed." : "Not quite yet."}
           </h1>
           <p className="text-ink-secondary mt-1">{quiz.title}</p>
           <div className="flex flex-wrap items-center justify-center gap-x-8 gap-y-4 mt-6">
             <div>
-              <p className="text-3xl font-display font-bold text-coral-500">{result.score}%</p>
-              <p className="text-xs text-ink-tertiary mt-1">Score</p>
+              <p className="text-3xl font-display font-medium text-coral-500 tabular-nums">{result.score}%</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary mt-1">Score</p>
             </div>
             <div>
-              <p className="text-3xl font-display font-bold text-ink">{result.correct_answers}/{result.total_questions}</p>
-              <p className="text-xs text-ink-tertiary mt-1">Correct</p>
+              <p className="text-3xl font-display font-medium text-ink tabular-nums">{result.correct_answers}/{result.total_questions}</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary mt-1">Correct</p>
             </div>
             <div>
-              <p className="text-3xl font-display font-bold text-amber-500">{result.xp_earned}</p>
-              <p className="text-xs text-ink-tertiary mt-1">XP earned</p>
+              <p className="text-3xl font-display font-medium text-amber-500 tabular-nums">{result.xp_earned}</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary mt-1">XP earned</p>
             </div>
             <div>
-              <p className="text-3xl font-display font-bold text-ink">{formatClock(result.duration_seconds)}</p>
-              <p className="text-xs text-ink-tertiary mt-1">Time taken</p>
+              <p className="text-3xl font-display font-medium text-ink tabular-nums">{formatClock(result.duration_seconds)}</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary mt-1">Time taken</p>
             </div>
           </div>
-          <p className="text-xs text-ink-tertiary mt-4">
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary mt-4">
             Attempt {result.attempt_number}
             {quiz.max_attempts ? ` of ${quiz.max_attempts}` : ""} · Best {result.best_score}%
             {attemptsLeft === 0 ? " · no attempts left" : ""}
@@ -288,7 +293,10 @@ export default function QuizPage() {
 
         {result.feedback && result.feedback.length > 0 && (
           <div className="space-y-3 text-left">
-            <h2 className="font-display text-xl font-semibold text-ink">Review your answers</h2>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-coral-600 dark:text-coral-400">
+              {"// "}Post-attempt review
+            </p>
+            <h2 className="font-display text-xl font-medium text-ink">Review your answers</h2>
             <p className="text-sm text-ink-secondary -mt-2">
               The explanations below are shown only after you submit.
             </p>
@@ -359,11 +367,12 @@ export default function QuizPage() {
     return (
       <div className="max-w-2xl mx-auto">
         <Card padding="lg" className="text-center space-y-4">
-          <div className="h-16 w-16 rounded-2xl bg-surface-tertiary dark:bg-white/5 flex items-center justify-center mx-auto">
+          <div className="h-16 w-16 rounded-xl border border-border dark:border-white/10 bg-surface-secondary dark:bg-white/5 flex items-center justify-center mx-auto">
             <Lock className="h-8 w-8 text-ink-tertiary" />
           </div>
           <div>
-            <h1 className="font-display text-2xl font-semibold text-ink">No attempts left</h1>
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-tertiary">{"// "}Attempt quota exhausted</p>
+            <h1 className="font-display text-2xl font-medium text-ink mt-1">No attempts left</h1>
             <p className="text-sm text-ink-secondary mt-1">
               {quiz.title}
             </p>
@@ -397,7 +406,7 @@ export default function QuizPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 pb-24">
+    <div className="max-w-3xl mx-auto space-y-6 pb-28">
       <div className="flex items-center gap-3">
         <button
           onClick={() => router.back()}
@@ -406,33 +415,66 @@ export default function QuizPage() {
         >
           <ChevronLeft className="h-5 w-5" />
         </button>
-        <div className="flex-1 min-w-0">
-          <p className="eyebrow mb-1">Quiz</p>
-          <h1 className="font-display text-xl sm:text-2xl font-semibold text-ink flex items-center gap-2">
-            <ClipboardList className="h-6 w-6 text-coral-500 shrink-0" />
-            <span className="truncate">{quiz.title}</span>
-          </h1>
+        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400">
+          — Assessment // Quiz runner —
+        </p>
+      </div>
+
+      <header className="relative overflow-hidden rounded-xl border border-border dark:border-white/10 bg-surface dark:bg-night-500">
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-coral-500/60 to-transparent" aria-hidden="true" />
+        <div className="p-5 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-tertiary flex items-center gap-1.5">
+                <ClipboardList className="h-3.5 w-3.5 text-coral-500" /> Timed assessment
+              </p>
+              <h1 className="font-display text-xl sm:text-2xl font-medium text-ink mt-2 leading-snug">
+                {quiz.title}
+              </h1>
+              {quiz.description && (
+                <p className="text-sm text-ink-secondary mt-1 max-w-2xl">{quiz.description}</p>
+              )}
+            </div>
+            <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-coral-600 dark:text-coral-400 border border-coral-500/30 bg-coral-500/5 rounded-full px-3 py-1 shrink-0 tabular-nums">
+              Pass {quiz.passing_score}%
+            </span>
+          </div>
         </div>
-        <Badge variant="outline" size="sm" className="shrink-0">Pass {quiz.passing_score}%</Badge>
-      </div>
-
-      {quiz.description && <p className="text-ink-secondary">{quiz.description}</p>}
-
-      <div className="flex flex-wrap items-center gap-2 text-xs text-ink-tertiary">
-        <Badge variant="outline" size="sm">
-          Attempt {attempt.attempts_used + 1}
-          {attempt.max_attempts ? ` of ${attempt.max_attempts}` : ""}
-        </Badge>
-        <Badge variant="outline" size="sm" className="flex items-center gap-1">
-          <Timer className="h-3.5 w-3.5" />
-          {secondsLeft !== null
-            ? `${formatClock(secondsLeft)} left`
-            : `${formatClock(elapsedSeconds)} elapsed`}
-        </Badge>
-        {attempt.best_score > 0 && (
-          <Badge variant="outline" size="sm">Best {attempt.best_score}%</Badge>
-        )}
-      </div>
+        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-border dark:bg-white/10 border-t border-border dark:border-white/10">
+          <div className="bg-surface dark:bg-night-500 px-4 py-3">
+            <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">Attempt</dt>
+            <dd className="text-sm text-ink mt-0.5 tabular-nums">
+              {attempt.attempts_used + 1}
+              {attempt.max_attempts ? ` of ${attempt.max_attempts}` : ""}
+            </dd>
+          </div>
+          <div className="bg-surface dark:bg-night-500 px-4 py-3">
+            <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">
+              {secondsLeft !== null ? "Remaining" : "Elapsed"}
+            </dt>
+            <dd
+              className={cn(
+                "text-sm mt-0.5 tabular-nums font-mono",
+                secondsLeft !== null && secondsLeft <= 60 ? "text-red-600 dark:text-red-400" : "text-ink",
+              )}
+            >
+              {secondsLeft !== null ? formatClock(secondsLeft) : formatClock(elapsedSeconds)}
+            </dd>
+          </div>
+          <div className="bg-surface dark:bg-night-500 px-4 py-3">
+            <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">Record</dt>
+            <dd className="text-sm text-ink mt-0.5 tabular-nums">
+              {attempt.best_score > 0 ? `Best ${attempt.best_score}%` : "No record"}
+            </dd>
+          </div>
+          <div className="bg-surface dark:bg-night-500 px-4 py-3">
+            <dt className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">Progress</dt>
+            <dd className="text-sm text-ink mt-0.5 tabular-nums">
+              {Object.keys(answers).length} of {quiz.questions.length} answered
+            </dd>
+          </div>
+        </dl>
+      </header>
 
       {timeIsUp && (
         <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
@@ -451,24 +493,24 @@ export default function QuizPage() {
           return (
             <Card key={q.id} padding="md">
               <div className="flex items-start gap-3 mb-4">
-                <span className="h-7 w-7 rounded-lg bg-coral-500/10 text-coral-600 dark:text-coral-400 flex items-center justify-center text-sm font-semibold flex-shrink-0">
-                  {idx + 1}
+                <span className="h-7 w-7 rounded-md border border-coral-500/30 bg-coral-500/10 text-coral-600 dark:text-coral-400 flex items-center justify-center font-mono text-[11px] flex-shrink-0 tabular-nums">
+                  {String(idx + 1).padStart(2, "0")}
                 </span>
-                <div className="flex-1">
-                  <p className="font-medium text-ink">{q.content}</p>
-                  <p className="text-xs text-ink-tertiary mt-0.5">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-ink leading-relaxed break-words">{q.content}</p>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary mt-1">
                     {q.points} pts · Choose one answer
                   </p>
                 </div>
               </div>
-              <div className="space-y-2 pl-10">
+              <div className="space-y-2 sm:pl-10">
                 {q.options.map((opt) => (
                   <button
                     key={opt.id}
                     onClick={() => selectAnswer(q.id, opt.id, multiple)}
                     disabled={timeIsUp}
                     className={cn(
-                      "w-full text-left px-4 py-3 rounded-xl border transition-colors text-sm",
+                      "w-full text-left px-4 py-3 rounded-lg border transition-colors text-sm",
                       isSelected(opt.id)
                         ? "border-coral-500 bg-coral-50 dark:bg-coral-500/10 text-ink font-medium"
                         : "border-border dark:border-white/10 text-ink-secondary hover:border-coral-400/60 hover:bg-surface-secondary dark:hover:bg-white/5",
@@ -476,7 +518,7 @@ export default function QuizPage() {
                     )}
                   >
                     <span className="flex items-center gap-2">
-                      {isSelected(opt.id) ? <CheckCircle className="h-4 w-4 text-coral-500" /> : <span className="h-4 w-4 rounded-full border border-ink-tertiary/40" />}
+                      {isSelected(opt.id) ? <CheckCircle className="h-4 w-4 text-coral-500 shrink-0" /> : <span className="h-4 w-4 rounded-full border border-ink-tertiary/40 shrink-0" />}
                       <span className="break-words">{opt.content}</span>
                     </span>
                   </button>
@@ -488,17 +530,25 @@ export default function QuizPage() {
       </div>
 
       <div className="fixed bottom-0 inset-x-0 lg:left-64 bg-surface/90 dark:bg-night-500/90 backdrop-blur-xl border-t border-border dark:border-white/5 p-4">
-        <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 pb-[env(safe-area-inset-bottom)]">
-          <p className="text-sm text-ink-secondary">
-            {Object.keys(answers).length}/{quiz.questions.length} answered
-          </p>
-          <Button
-            onClick={submitAnswers}
-            loading={submitMutation.isPending}
-            disabled={!allAnswered && !timeIsUp}
-          >
-            {timeIsUp ? "Submit Answers" : "Submit Quiz"}
-          </Button>
+        <div className="max-w-3xl mx-auto pb-[env(safe-area-inset-bottom)]">
+          <div className="h-1 rounded-full bg-surface-tertiary dark:bg-white/10 overflow-hidden mb-3" aria-hidden="true">
+            <div
+              className="h-full bg-coral-500 transition-all"
+              style={{ width: `${Math.round((Object.keys(answers).length / quiz.questions.length) * 100)}%` }}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary tabular-nums">
+              {Object.keys(answers).length}/{quiz.questions.length} answered
+            </p>
+            <Button
+              onClick={submitAnswers}
+              loading={submitMutation.isPending}
+              disabled={!allAnswered && !timeIsUp}
+            >
+              {timeIsUp ? "Submit Answers" : "Submit Quiz"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

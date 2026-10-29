@@ -15,17 +15,17 @@ const paddings = {
   lg: "p-8",
 };
 
-// Editorial card: rounded-2xl, subtle border, no heavy shadows.
+// Obsidian card: sharp corners, single-pixel outline, no heavy shadows.
 export function Card({ children, className, padding = "md", hover, onClick }: CardProps) {
   return (
     <div
       onClick={onClick}
       className={cn(
-        "rounded-2xl border border-border bg-surface",
+        "rounded-xl border border-border bg-surface",
         "shadow-none",
         paddings[padding],
         hover &&
-          "hover:border-coral-400/60 dark:hover:border-coral-500/40 hover:bg-surface-secondary transition-all duration-200 cursor-pointer",
+          "hover:border-border-light hover:bg-surface-secondary transition-colors duration-200 cursor-pointer",
         className
       )}
     >

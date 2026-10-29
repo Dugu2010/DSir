@@ -174,8 +174,8 @@ export default function LearnPage() {
           >
             <div className="flex items-center justify-between p-4 border-b border-border dark:border-white/10">
               <div>
-                <p className="eyebrow mb-0.5">Curriculum</p>
-                <h2 className="font-display font-semibold text-ink dark:text-ink text-sm">Course Content</h2>
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-coral-600 dark:text-coral-400 mb-0.5">{"// "}Syllabus index</p>
+                <h2 className="font-display font-medium text-ink text-sm">Course Content</h2>
               </div>
               <button
                 onClick={() => setDrawer("closed")}
@@ -202,22 +202,22 @@ export default function LearnPage() {
                       if (drawer === "mobile") setDrawer("closed");
                     }}
                     aria-current={activeLesson === l.slug ? "page" : undefined}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left transition-all ${
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-colors ${
                       activeLesson === l.slug
-                        ? "bg-coral-50 dark:bg-coral-500/10 text-coral-700 dark:text-coral-400 font-medium border border-coral-200 dark:border-coral-500/30"
+                        ? "bg-surface-tertiary dark:bg-night-400 text-ink font-semibold"
                         : "text-ink-secondary hover:bg-surface-secondary dark:hover:bg-white/5 hover:text-ink dark:hover:text-ink"
                     }`}
                   >
-                    <div className={`h-6 w-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs ${
+                    <div className={`h-6 w-6 rounded-md flex-shrink-0 flex items-center justify-center text-xs ${
                       activeLesson === l.slug
-                        ? "bg-coral-500 text-night-600"
+                        ? "bg-coral-500/15 border border-coral-500/40 text-coral-600 dark:text-coral-400"
                         : "bg-surface-tertiary dark:bg-white/10 text-ink-tertiary"
                     }`}>
-                      {activeLesson === l.slug ? <Play className="h-3 w-3 fill-current" /> : l.slug[0]?.toUpperCase()}
+                      {activeLesson === l.slug ? <span className="h-1.5 w-1.5 rounded-full bg-coral-500" /> : l.slug[0]?.toUpperCase()}
                     </div>
                     <span className="flex-1 truncate">{l.title}</span>
                     {l.is_free_preview && (
-                      <Badge size="sm" className="flex-shrink-0 bg-coral-500/10 text-coral-700 dark:text-coral-400 border border-coral-500/30">Free</Badge>
+                      <span className="font-mono text-[9px] uppercase tracking-wide text-coral-600 dark:text-coral-400 flex-shrink-0">Preview</span>
                     )}
                   </button>
                 ))}
@@ -245,11 +245,11 @@ export default function LearnPage() {
           {lesson && (
             <button
               onClick={scrollToSandbox}
-              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-coral-500 to-coral-400 text-night-600 hover:from-coral-400 hover:to-coral-300 transition-all shadow-md shadow-coral-500/30 ring-2 ring-coral-500/30 hover:ring-coral-400/50"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full text-[11px] font-mono uppercase tracking-wide bg-coral-500 text-white hover:bg-coral-600 transition-colors"
               title="Jump to the code playground"
               aria-label="Jump to the code playground"
             >
-              <Play className="h-3.5 w-3.5 fill-current" /> <span className="hidden sm:inline">Try it Out</span>
+              <Play className="h-3 w-3 fill-current" /> <span className="hidden sm:inline">Run Code</span>
             </button>
           )}
           <Button
@@ -285,12 +285,13 @@ export default function LearnPage() {
             <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-8 min-w-0">
               {/* Header */}
               <div className="mb-8">
-                <div className="flex items-center gap-3 mb-3">
+                <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-coral-600 dark:text-coral-400 mb-3">{"// "}Lesson dossier</p>
+                <div className="flex flex-wrap items-center gap-3 mb-3">
                   <Badge size="sm" className={difficultyColor(lesson.difficulty)}>
                     {lesson.difficulty}
                   </Badge>
                   {lesson.estimated_duration_minutes && (
-                    <span className="flex items-center gap-1 text-xs text-ink-tertiary">
+                    <span className="flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide text-ink-tertiary">
                       <Clock className="h-3.5 w-3.5" /> {formatDuration(lesson.estimated_duration_minutes)}
                     </span>
                   )}
@@ -298,7 +299,7 @@ export default function LearnPage() {
                     <Badge key={tag} size="sm" variant="outline">{tag}</Badge>
                   ))}
                 </div>
-                <h1 className="font-display text-2xl sm:text-3xl font-semibold tracking-tight text-ink break-words">{lesson.title}</h1>
+                <h1 className="font-display text-2xl sm:text-3xl font-medium tracking-tight leading-[1.15] text-ink break-words">{lesson.title}</h1>
                 {lesson.description && (
                   <p className="mt-2 text-ink-secondary">{lesson.description}</p>
                 )}
@@ -306,9 +307,9 @@ export default function LearnPage() {
 
               {/* Learning Objectives */}
               {lesson.learning_objectives && lesson.learning_objectives.length > 0 && (
-                <div className="mb-8 p-5 rounded-2xl bg-coral-50/60 dark:bg-coral-500/5 border border-coral-200 dark:border-coral-500/10">
-                  <h3 className="text-sm font-semibold text-coral-700 dark:text-coral-400 mb-3 flex items-center gap-2 font-mono uppercase tracking-eyebrow">
-                    <Lightbulb className="h-4 w-4" /> Learning Objectives
+                <div className="mb-8 p-5 rounded-xl bg-surface dark:bg-night-500 border border-border dark:border-white/10">
+                  <h3 className="text-[11px] font-mono font-semibold text-coral-600 dark:text-coral-400 mb-3 flex items-center gap-2 uppercase tracking-[0.18em]">
+                    <Lightbulb className="h-4 w-4" /> Key Learning Objectives
                   </h3>
                   <ul className="space-y-2 list-none pl-0">
                     {lesson.learning_objectives.map((obj: string, i: number) => (
@@ -326,12 +327,13 @@ export default function LearnPage() {
 
               {/* Try it Yourself */}
               <div ref={sandboxRef} className="mt-8 pt-8 border-t border-border dark:border-white/10">
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-tertiary mb-3">{"// "}Live sandbox</p>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="h-10 w-10 rounded-xl bg-coral-500/10 flex items-center justify-center">
+                  <div className="h-10 w-10 rounded-lg bg-coral-500/10 flex items-center justify-center">
                     <Play className="h-5 w-5 text-coral-600 dark:text-coral-400" />
                   </div>
                   <div>
-                    <h2 className="font-display text-lg font-semibold text-ink">Try it Yourself</h2>
+                    <h2 className="font-display text-lg font-medium text-ink">Try it Yourself</h2>
                     <p className="text-sm text-ink-secondary">
                       Experiment with code — runs entirely in your browser. No server needed.
                     </p>
@@ -414,7 +416,7 @@ print("Hello, DSir!")`}
             role="dialog"
             aria-modal="true"
             aria-label="Lesson notes"
-            className="bg-surface dark:bg-night-500 rounded-2xl p-6 max-w-lg w-full max-h-[80vh] flex flex-col shadow-xl border border-border dark:border-white/10"
+            className="bg-surface dark:bg-night-500 rounded-xl p-6 max-w-lg w-full max-h-[80vh] flex flex-col border border-border dark:border-white/10"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">

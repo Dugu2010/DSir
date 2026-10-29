@@ -77,11 +77,15 @@ export default function LessonPage() {
   // Find prev/next lesson
   let prevLesson: LessonNav | null = null, nextLesson: LessonNav | null = null;
   let currentModuleTitle = '';
+  let currentModuleIndex = 0;
   if (structure && moduleSlug && lessonSlug) {
     const allLessons: LessonNav[] = [];
-    structure.forEach((m: any) => {
+    structure.forEach((m: any, mIdx: number) => {
       m.lessons?.forEach((l: any) => allLessons.push({ module: m, lesson: l }));
-      if (m.slug === moduleSlug) currentModuleTitle = m.title;
+      if (m.slug === moduleSlug) {
+        currentModuleTitle = m.title;
+        currentModuleIndex = mIdx;
+      }
     });
     const idx = allLessons.findIndex((l) => l.lesson.slug === lessonSlug && l.module.slug === moduleSlug);
     if (idx > 0) prevLesson = allLessons[idx - 1];
@@ -130,6 +134,11 @@ export default function LessonPage() {
   // Prefill the sandbox with the lesson's first runnable code example
   const starter = extractStarterCode(lesson.content);
 
+  // Editorial headline accent: italicise the final word of the title.
+  const titleWords = lesson.title.trim().split(/\s+/);
+  const titleLast = titleWords.length > 1 ? titleWords[titleWords.length - 1] : '';
+  const titleHead = titleWords.length > 1 ? titleWords.slice(0, -1).join(' ') : lesson.title;
+
   // Markdown renderer with syntax highlighting
   const renderContent = (content: string) => {
     const parts = content.split(/(```[\s\S]*?```)/g);
@@ -169,27 +178,26 @@ export default function LessonPage() {
             role="complementary"
             aria-label="Course lessons"
           >
-            <div className="flex items-center justify-between p-4 border-b border-border dark:border-white/5">
-              <div>
-                <p className="eyebrow mb-0.5">Curriculum</p>
-                <h2 className="font-display font-semibold text-sm text-ink dark:text-ink">Course Content</h2>
-              </div>
+            <div className="flex items-center justify-between h-14 px-4 border-b border-border bg-surface-secondary">
+              <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ink-tertiary">
+                Syllabus Index <span className="text-coral-500">/ Track {String(currentModuleIndex + 1).padStart(2, '0')}</span>
+              </p>
               <button
                 onClick={() => setDrawer('closed')}
-                className="p-1.5 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary dark:text-ink-tertiary"
+                className="p-1.5 rounded-lg hover:bg-surface-tertiary text-ink-secondary transition-colors"
                 aria-label="Close course content menu"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <nav className="flex-1 overflow-y-auto p-3 space-y-1 scrollbar-thin" aria-label="Lessons">
+            <nav className="flex-1 overflow-y-auto p-2 space-y-3 scrollbar-thin" aria-label="Lessons">
               {structure?.map((mod: any, modIdx: number) => (
                 <div key={mod.id || modIdx}>
-                  <div className="flex items-center gap-2 px-3 py-2 text-xs font-mono uppercase tracking-eyebrow text-ink-tertiary">
-                    <span className="h-5 w-5 rounded-md bg-surface-tertiary dark:bg-white/5 flex items-center justify-center text-coral-600 dark:text-coral-400">
-                      {String(modIdx + 1).padStart(2, '0')}
+                  <div className="flex items-center gap-2 px-2 pt-2 pb-1.5">
+                    <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-coral-500 flex-shrink-0">
+                      Mod {String(modIdx + 1).padStart(2, '0')}
                     </span>
-                    {mod.title}
+                    <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary truncate">{mod.title}</span>
                   </div>
                   {mod.lessons?.map((l: any) => {
                     const isCurrent = l.slug === lessonSlug && mod.slug === moduleSlug;
@@ -200,23 +208,22 @@ export default function LessonPage() {
                         onClick={() => setDrawer((d) => (d === 'mobile' ? 'closed' : d))}
                         aria-current={isCurrent ? 'page' : undefined}
                         className={cn(
-                          "flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left transition-colors duration-150 w-full",
+                          "flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm text-left transition-colors duration-150 w-full",
                           isCurrent
-                            ? "bg-coral-50 dark:bg-coral-500/10 text-coral-700 dark:text-coral-400 font-medium border border-coral-200 dark:border-coral-500/30"
-                            : "text-ink-secondary dark:text-ink-tertiary hover:text-ink dark:hover:text-ink hover:bg-surface-tertiary dark:hover:bg-white/5"
+                            ? "bg-surface-tertiary dark:bg-night-400 text-ink font-semibold"
+                            : "text-ink-secondary dark:text-ink-tertiary hover:text-ink hover:bg-surface-secondary dark:hover:bg-white/5"
                         )}
                       >
-                        <div className={cn(
-                          "h-6 w-6 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-medium",
-                          isCurrent
-                            ? "bg-coral-500 text-night-600"
-                            : "bg-surface-tertiary dark:bg-white/5 text-ink-tertiary"
-                        )}>
-                          {isCurrent ? <Play className="h-3 w-3 fill-current" /> : l.slug[0]?.toUpperCase()}
-                        </div>
-                        <span className="flex-1 truncate text-xs">{l.title}</span>
-                        {l.is_free_preview && (
-                          <Badge size="sm" className="bg-coral-500/10 text-coral-700 dark:text-coral-400 border border-coral-500/30 flex-shrink-0">Free</Badge>
+                        <span className={cn(
+                          "h-1.5 w-1.5 rounded-full flex-shrink-0",
+                          isCurrent ? "bg-coral-500" : "bg-ink-tertiary/40"
+                        )} aria-hidden="true" />
+                        <span className="flex-1 truncate text-[13px]">{l.title}</span>
+                        {isCurrent && (
+                          <span className="font-mono text-[9px] uppercase tracking-wider bg-coral-500 text-white px-1.5 py-0.5 rounded-sm flex-shrink-0">Now</span>
+                        )}
+                        {!isCurrent && l.is_free_preview && (
+                          <span className="font-mono text-[9px] uppercase tracking-wider text-coral-500 flex-shrink-0">Preview</span>
                         )}
                       </Link>
                     );
@@ -231,7 +238,7 @@ export default function LessonPage() {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top navigation bar */}
-        <div className="flex items-center gap-2 px-4 lg:px-6 h-14 border-b border-border dark:border-white/5 bg-surface/80 dark:bg-night-500/80 backdrop-blur-sm flex-shrink-0">
+        <div className="flex items-center gap-2 px-4 lg:px-6 h-14 border-b border-border bg-surface-secondary/80 dark:bg-night-600/80 backdrop-blur-sm flex-shrink-0">
           {/* Drawer toggle */}
           <button
             onClick={toggleDrawer}
@@ -240,8 +247,8 @@ export default function LessonPage() {
             className={cn(
               "p-2 rounded-lg transition-colors",
               drawer !== 'closed'
-                ? "bg-coral-50 dark:bg-coral-500/10 text-coral-600 dark:text-coral-400"
-                : "hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary dark:text-ink-tertiary"
+                ? "bg-surface-tertiary text-coral-500"
+                : "hover:bg-surface-tertiary text-ink-secondary dark:text-ink-tertiary"
             )}
             aria-label="Toggle course content menu"
           >
@@ -250,30 +257,30 @@ export default function LessonPage() {
 
           <Link
             href={`/courses/${slug}`}
-            className="p-2 rounded-lg hover:bg-surface-tertiary dark:hover:bg-white/5 text-ink-secondary dark:text-ink-tertiary transition-colors"
+            className="p-2 rounded-lg hover:bg-surface-tertiary text-ink-secondary dark:text-ink-tertiary transition-colors"
             aria-label="Back to course page"
           >
             <ChevronLeft className="h-5 w-5" />
           </Link>
 
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-ink dark:text-ink truncate">{lesson.title}</p>
-            {currentModuleTitle && (
-              <p className="text-xs text-ink-tertiary truncate">{currentModuleTitle}</p>
-            )}
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary truncate">
+              {currentModuleTitle || 'Lesson'}
+            </p>
+            <p className="text-sm font-medium text-ink truncate leading-tight">{lesson.title}</p>
           </div>
 
           <div className="flex items-center gap-1.5 flex-shrink-0">
             <button
               onClick={scrollToSandbox}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-coral-500 to-coral-400 text-night-600 hover:from-coral-400 hover:to-coral-300 transition-all shadow-md shadow-coral-500/30 ring-2 ring-coral-500/30 hover:ring-coral-400/50"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] font-mono font-semibold uppercase tracking-wide bg-coral-500 text-white hover:bg-coral-600 transition-colors"
               title="Jump to the code playground"
             >
-              <Play className="h-3.5 w-3.5 fill-current" /> Try it Out
+              <Play className="h-3 w-3 fill-current" /> Run Code
             </button>
             {lesson.estimated_duration_minutes && (
-              <span className="hidden md:flex items-center gap-1 text-xs text-ink-secondary dark:text-ink-tertiary px-2 py-1 rounded-lg bg-surface-tertiary dark:bg-white/5">
-                <Clock className="h-3.5 w-3.5" /> {lesson.estimated_duration_minutes} min
+              <span className="hidden md:flex items-center gap-1 font-mono text-[11px] text-ink-tertiary px-2 py-1 rounded-md bg-surface-tertiary dark:bg-white/5">
+                <Clock className="h-3 w-3" /> {lesson.estimated_duration_minutes}m
               </span>
             )}
             {lesson.difficulty && (
@@ -288,30 +295,50 @@ export default function LessonPage() {
 
         {/* Scrollable content */}
         <div ref={contentRef} className="flex-1 overflow-y-auto scrollbar-thin">
-          <div className="max-w-3xl mx-auto px-4 lg:px-8 py-6 lg:py-10">
+          <div className="max-w-3xl mx-auto px-4 lg:px-8 py-8 lg:py-12">
             {/* Title area */}
             <div className="mb-8">
-              <p className="eyebrow mb-2">Lesson</p>
-              <h1 className="font-display text-2xl lg:text-3xl font-semibold tracking-tight text-ink">{lesson.title}</h1>
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-coral-500">
+                  — No. {String(currentModuleIndex + 1).padStart(2, '0')} — {currentModuleTitle || 'Lesson'}
+                </span>
+                {lesson.estimated_duration_minutes && (
+                  <>
+                    <span className="text-ink-tertiary text-[10px]">/</span>
+                    <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">
+                      {lesson.estimated_duration_minutes} min
+                    </span>
+                  </>
+                )}
+              </div>
+              <h1 className="font-display text-3xl lg:text-4xl font-medium tracking-tight text-ink leading-[1.12]">
+                {titleHead}{' '}
+                {titleLast && <em className="italic font-normal text-coral-500">{titleLast}</em>}
+              </h1>
               {lesson.description && (
-                <p className="mt-2 text-ink-secondary leading-relaxed">{lesson.description}</p>
+                <p className="mt-4 text-base lg:text-lg text-ink-secondary leading-relaxed max-w-2xl">
+                  {lesson.description}
+                </p>
               )}
             </div>
 
             {/* Learning Objectives */}
             {lesson.learning_objectives && lesson.learning_objectives.length > 0 && (
-              <div className="mb-8 p-5 rounded-2xl bg-coral-50/60 dark:bg-coral-500/5 border border-coral-200 dark:border-coral-500/10">
-                <h3 className="text-sm font-semibold text-coral-700 dark:text-coral-400 mb-3 flex items-center gap-2 font-mono uppercase tracking-eyebrow">
-                  <Lightbulb className="h-4 w-4" /> Learning Objectives
-                </h3>
-                <ul className="space-y-2 list-none pl-0">
+              <div className="mb-8 rounded-xl border border-border bg-surface p-5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Lightbulb className="h-4 w-4 text-coral-500" />
+                  <h3 className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">
+                    Key Architectural Competencies
+                  </h3>
+                </div>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
                   {lesson.learning_objectives.map((obj: string, i: number) => (
-                    <li key={i} className="flex items-start gap-2.5 text-sm text-ink-secondary">
-                      <CheckCircle className="h-4 w-4 text-coral-500 flex-shrink-0 mt-0.5" />
-                      {obj}
-                    </li>
+                    <div key={i} className="flex items-start gap-2 rounded-lg bg-surface-secondary dark:bg-night-600/60 p-3">
+                      <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                      <span className="text-xs leading-relaxed text-ink-secondary">{obj}</span>
+                    </div>
                   ))}
-                </ul>
+                </div>
               </div>
             )}
 
@@ -321,17 +348,17 @@ export default function LessonPage() {
             </div>
 
             {/* Try it Yourself */}
-            <div ref={sandboxRef} className="mt-8 pt-8 border-t border-border dark:border-white/5">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="h-10 w-10 rounded-xl bg-coral-500/10 dark:bg-coral-500/10 flex items-center justify-center">
-                  <Play className="h-5 w-5 text-coral-600 dark:text-coral-400" />
+            <div ref={sandboxRef} className="mt-10 pt-8 border-t border-border">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="h-6 w-6 rounded-md bg-coral-500/10 flex items-center justify-center">
+                    <Play className="h-3.5 w-3.5 text-coral-500 fill-current" />
+                  </span>
+                  <h2 className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-ink">Live Sandbox</h2>
                 </div>
-                <div>
-                  <h2 className="font-display text-lg font-semibold text-ink">Try it Yourself</h2>
-                  <p className="text-sm text-ink-secondary">
-                    Experiment with code — runs entirely in your browser. No server needed.
-                  </p>
-                </div>
+                <span className="hidden sm:inline font-mono text-[10px] uppercase tracking-[0.14em] text-ink-tertiary">
+                  Runs in your browser
+                </span>
               </div>
               <Sandbox
                 language={starter?.language ?? "python"}
@@ -341,7 +368,7 @@ export default function LessonPage() {
             </div>
 
             {/* Bottom actions */}
-            <div className="mt-10 pt-8 border-t border-border dark:border-white/5">
+            <div className="mt-10 pt-8 border-t border-border">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
                 <Button
                   variant={progress?.is_completed ? 'primary' : 'outline'}

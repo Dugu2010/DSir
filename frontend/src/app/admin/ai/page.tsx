@@ -8,8 +8,7 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import {
   Upload, Sparkles, FileText, BookOpen, CheckCircle2,
-  AlertCircle, ArrowRight, Code2,
-  Eye, FileType, Play, ChevronDown, ChevronRight,
+  AlertCircle, Eye, Play, ChevronDown, ChevronRight,
   Loader2,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -64,10 +63,10 @@ export default function AdminAIPage() {
   if (!isAdmin) {
     return (
       <div className="max-w-xl mx-auto mt-20 text-center">
-        <div className="h-16 w-16 rounded-2xl bg-red-100 dark:bg-red-500/10 flex items-center justify-center mx-auto mb-4">
+        <div className="h-16 w-16 rounded-lg bg-red-500/10 flex items-center justify-center mx-auto mb-4">
           <AlertCircle className="h-8 w-8 text-red-500" />
         </div>
-        <h2 className="font-display text-xl font-semibold text-ink">Admin Access Only</h2>
+        <h2 className="font-display text-xl font-medium text-ink">Admin Access Only</h2>
         <p className="text-ink-secondary mt-2">This page requires admin privileges.</p>
       </div>
     );
@@ -153,8 +152,10 @@ export default function AdminAIPage() {
     return (
       <div className="max-w-3xl mx-auto space-y-6">
         <div>
-          <p className="eyebrow mb-2">Admin tools</p>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-ink flex items-center gap-3">
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400 mb-2">
+            {"// "}Admin tools · Content pipeline
+          </p>
+          <h1 className="font-display text-2xl font-medium tracking-tight text-ink flex items-center gap-3">
             <Sparkles className="h-6 w-6 text-coral-600 dark:text-coral-400" />
             AI Course Generator
           </h1>
@@ -168,23 +169,23 @@ export default function AdminAIPage() {
             onDragOver={e => e.preventDefault()}
             onDrop={handleDrop}
             onClick={() => fileRef.current?.click()}
-            className="border-2 border-dashed border-border dark:border-white/15 rounded-2xl p-10 text-center cursor-pointer hover:border-coral-400 dark:hover:border-coral-500/40 transition-colors"
+            className="border-2 border-dashed border-border dark:border-white/15 rounded-xl p-10 text-center cursor-pointer hover:border-coral-400 dark:hover:border-coral-500/40 transition-colors"
           >
             <input ref={fileRef} type="file" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md,.py" onChange={e => { const f = e.target.files?.[0]; if (f) { setFile(f); setStep("upload"); setError(""); } }} className="hidden" />
             {file ? (
               <div className="space-y-2">
-                <div className="h-14 w-14 rounded-2xl bg-coral-50 dark:bg-coral-500/10 flex items-center justify-center mx-auto">
+                <div className="h-14 w-14 rounded-lg bg-coral-500/10 flex items-center justify-center mx-auto">
                   <FileText className="h-7 w-7 text-coral-600 dark:text-coral-400" />
                 </div>
-                <p className="font-display font-semibold text-ink text-lg">{file.name}</p>
+                <p className="font-display font-medium text-ink text-lg">{file.name}</p>
                 <p className="text-sm text-ink-tertiary">{(file.size / 1024).toFixed(0)} KB</p>
               </div>
             ) : (
               <div className="space-y-3">
-                <div className="h-14 w-14 rounded-2xl bg-surface-tertiary dark:bg-white/5 flex items-center justify-center mx-auto">
+                <div className="h-14 w-14 rounded-lg border border-border dark:border-white/10 bg-surface-tertiary dark:bg-white/5 flex items-center justify-center mx-auto">
                   <Upload className="h-7 w-7 text-ink-tertiary" />
                 </div>
-                <p className="font-display font-semibold text-ink">Drop your file here</p>
+                <p className="font-display font-medium text-ink">Drop your file here</p>
                 <p className="text-sm text-ink-tertiary">PDF · Image · Text · Code — even handwritten notes</p>
               </div>
             )}
@@ -196,7 +197,7 @@ export default function AdminAIPage() {
                 type="text" value={topic}
                 onChange={e => setTopic(e.target.value)}
                 placeholder="What's this about? (e.g. Python Programming)"
-                className="w-full h-10 px-4 rounded-xl border border-border dark:border-white/10 bg-surface text-sm text-ink placeholder:text-ink-tertiary focus:outline-none focus:ring-2 focus:ring-coral-500"
+                className="w-full h-10 px-4 rounded-lg border border-border dark:border-white/10 bg-surface text-sm text-ink placeholder:text-ink-tertiary focus:outline-none focus:ring-2 focus:ring-coral-500"
               />
               <Button
                 onClick={uploadAndPreview}
@@ -218,10 +219,10 @@ export default function AdminAIPage() {
     return (
       <div className="max-w-2xl mx-auto">
         <Card padding="lg" className="text-center space-y-4">
-          <div className="h-14 w-14 rounded-2xl bg-red-100 dark:bg-red-500/10 flex items-center justify-center mx-auto">
+          <div className="h-14 w-14 rounded-lg bg-red-500/10 flex items-center justify-center mx-auto">
             <AlertCircle className="h-7 w-7 text-red-500" />
           </div>
-          <p className="font-semibold text-red-600 dark:text-red-400">{error}</p>
+          <p className="font-medium text-red-600 dark:text-red-400">{error}</p>
           <Button variant="outline" onClick={reset}>Try Again</Button>
         </Card>
       </div>
@@ -235,10 +236,12 @@ export default function AdminAIPage() {
 
     return (
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <p className="eyebrow mb-2">Review</p>
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-ink flex items-center gap-3">
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400 mb-2">
+              {"// "}Review · Course structure
+            </p>
+            <h1 className="font-display text-2xl font-medium tracking-tight text-ink flex items-center gap-3">
               <Sparkles className="h-6 w-6 text-coral-600 dark:text-coral-400" />
               Course Preview
             </h1>
@@ -254,7 +257,10 @@ export default function AdminAIPage() {
 
         {/* Course header */}
         <Card padding="lg">
-          <h2 className="font-display text-xl font-semibold text-ink">{course.title}</h2>
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-tertiary mb-2">
+            {"// "}Extracted course
+          </p>
+          <h2 className="font-display text-xl font-medium text-ink">{course.title}</h2>
           <div className="flex flex-wrap gap-2 mt-3">
             <Badge variant="outline">{course.difficulty}</Badge>
             <Badge variant="outline">{summary?.modules} modules</Badge>
@@ -276,15 +282,15 @@ export default function AdminAIPage() {
                 onClick={() => toggleModule(mi)}
                 className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-surface-tertiary/50 dark:hover:bg-white/[0.03] transition-colors"
               >
-                <span className="h-7 w-7 rounded-lg bg-coral-100 dark:bg-coral-500/10 flex items-center justify-center text-xs font-bold text-coral-600 dark:text-coral-400 flex-shrink-0">
+                <span className="h-7 w-7 rounded-lg bg-coral-500/10 flex items-center justify-center font-mono text-xs font-medium text-coral-600 dark:text-coral-400 flex-shrink-0">
                   {String(mi + 1).padStart(2, "0")}
                 </span>
-                <span className="font-display font-semibold text-ink text-sm flex-1">{mod.title}</span>
+                <span className="font-display font-medium text-ink text-sm flex-1">{mod.title}</span>
                 <Badge size="sm" variant="outline">{mod.lessons?.length || 0} lessons</Badge>
                 {expandedMods.has(mi) ? <ChevronDown className="h-4 w-4 text-ink-tertiary" /> : <ChevronRight className="h-4 w-4 text-ink-tertiary" />}
               </button>
               {expandedMods.has(mi) && (
-                <div className="border-t border-border dark:border-white/5 px-5 py-2 space-y-1 bg-surface-tertiary/40 dark:bg-white/[0.02]">
+                <div className="border-t border-border dark:border-white/10 px-5 py-2 space-y-1 bg-surface-tertiary/40 dark:bg-white/[0.02]">
                   {mod.lessons?.map((l: any, li: number) => (
                     <div key={li} className="flex items-center gap-3 px-2 py-2 rounded-lg text-sm">
                       <Play className="h-3 w-3 text-ink-tertiary flex-shrink-0" />
@@ -319,16 +325,19 @@ export default function AdminAIPage() {
     return (
       <div className="max-w-xl mx-auto">
         <Card padding="lg" className="text-center space-y-6">
-          <div className="h-16 w-16 rounded-2xl bg-coral-50 dark:bg-coral-500/10 flex items-center justify-center mx-auto">
+          <div className="h-16 w-16 rounded-xl border border-coral-500/25 bg-coral-500/10 flex items-center justify-center mx-auto">
             <Loader2 className="h-8 w-8 text-coral-600 dark:text-coral-400 animate-spin" />
           </div>
           <div>
-            <p className="font-display font-semibold text-ink text-lg">Generating course content...</p>
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-tertiary mb-2">
+              {"// "}Pipeline running
+            </p>
+            <p className="font-display font-medium text-ink text-lg">Generating course content...</p>
             <p className="text-ink-secondary text-sm mt-1">
               {progress ? `${progress.generated} of ${progress.total} lessons ready` : "Starting..."}
             </p>
           </div>
-          <div className="h-2.5 rounded-full bg-surface-tertiary dark:bg-white/10 overflow-hidden">
+          <div className="h-1.5 rounded-full bg-surface-tertiary dark:bg-white/10 overflow-hidden">
             <div
               className="h-full rounded-full bg-coral-500 transition-all duration-500"
               style={{ width: `${pct}%` }}
@@ -353,11 +362,14 @@ export default function AdminAIPage() {
     return (
       <div className="max-w-xl mx-auto">
         <Card padding="lg" className="text-center space-y-6">
-          <div className="h-16 w-16 rounded-2xl bg-emerald-100 dark:bg-emerald-500/10 flex items-center justify-center mx-auto">
-            <CheckCircle2 className="h-8 w-8 text-emerald-600" />
+          <div className="h-16 w-16 rounded-xl border border-emerald-500/25 bg-emerald-500/10 flex items-center justify-center mx-auto">
+            <CheckCircle2 className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
           </div>
           <div>
-            <h2 className="font-display text-xl font-semibold text-ink">Course Imported!</h2>
+            <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-ink-tertiary mb-2">
+              {"// "}Pipeline complete
+            </p>
+            <h2 className="font-display text-xl font-medium text-ink">Course Imported!</h2>
             <p className="text-ink-secondary text-sm mt-1">All lesson content and exercises generated.</p>
             <div className="flex justify-center gap-3 mt-3">
               <Badge variant="outline">{importResult.module_count} modules</Badge>

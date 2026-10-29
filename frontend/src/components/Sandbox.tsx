@@ -294,7 +294,7 @@ export default function Sandbox({
   return (
     <div
       className={cn(
-        "rounded-2xl border border-border overflow-hidden bg-night-600",
+        "rounded-xl border border-border overflow-hidden bg-night-600",
         isFullscreen && "fixed inset-0 z-50 rounded-none",
         className
       )}
@@ -302,7 +302,7 @@ export default function Sandbox({
     >
       <div className="flex items-center h-11 px-3 border-b border-paper-50/10 dark:border-white/10 bg-paper-50/5 dark:bg-white/[0.03] gap-2">
         <Terminal className="h-3.5 w-3.5 text-coral-500 dark:text-coral-400" />
-        <span className="text-xs font-medium font-mono text-paper-50/80 dark:text-ink">{langLabel[language]}</span>
+        <span className="text-[10px] font-medium font-mono uppercase tracking-[0.14em] text-paper-50/80 dark:text-ink">{langLabel[language]}</span>
         {pyLoading && (
           <span className="flex items-center gap-1 text-xs text-amber-500 dark:text-amber-400 ml-2">
             <Loader2 className="h-3 w-3 animate-spin" /> Loading Python...
@@ -334,7 +334,7 @@ export default function Sandbox({
           onClick={runCode}
           disabled={isRunning || (language === "python" && pyLoading)}
           aria-label={isRunning ? "Running code" : "Run code"}
-          className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-semibold bg-coral-500 text-night-600 hover:bg-coral-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-mono uppercase tracking-wide bg-coral-500 text-white hover:bg-coral-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors shrink-0"
         >
           {isRunning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5 fill-current" />}
           <span>Run</span>

@@ -115,8 +115,8 @@ export default function WorkspacePage() {
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div className="min-w-0 flex-1">
-          <p className="eyebrow mb-1">Independent workspace</p>
-          <h1 className="font-display text-xl sm:text-3xl font-semibold tracking-tight text-ink flex items-center gap-2">
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-coral-600 dark:text-coral-400 mb-1">{"// "}Independent workspace</p>
+          <h1 className="font-display text-xl sm:text-3xl font-medium tracking-tight text-ink flex items-center gap-2">
             <TerminalSquare className="h-6 w-6 sm:h-7 sm:w-7 text-coral-500 shrink-0" />
             <span className="break-words">Python Playground</span>
           </h1>
@@ -126,10 +126,10 @@ export default function WorkspacePage() {
 
       <div className="grid gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
         <aside className="order-2 lg:order-1 space-y-4 min-w-0">
-          <div className="rounded-2xl border border-border dark:border-white/10 bg-surface dark:bg-night-500 p-4 space-y-3">
+          <div className="rounded-xl border border-border dark:border-white/10 bg-surface dark:bg-night-500 p-4 space-y-3">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-sm font-semibold text-ink flex items-center gap-2">
-                <FileCode2 className="h-4 w-4 text-coral-500" /> Saved snippets
+              <h2 className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-tertiary flex items-center gap-2">
+                <FileCode2 className="h-3.5 w-3.5 text-coral-500" /> Saved snippets
               </h2>
               <button
                 onClick={startNew}
@@ -157,7 +157,7 @@ export default function WorkspacePage() {
                       onClick={() => loadSnippet(snippet)}
                       className={`flex-1 min-w-0 text-left px-2.5 py-2 rounded-lg text-sm transition-colors ${
                         activeId === snippet.id
-                          ? "bg-coral-50 dark:bg-coral-500/10 text-coral-700 dark:text-coral-400 font-medium"
+                          ? "bg-surface-tertiary dark:bg-night-400 text-ink font-semibold"
                           : "text-ink-secondary hover:bg-surface-secondary dark:hover:bg-white/5"
                       }`}
                     >
@@ -181,9 +181,9 @@ export default function WorkspacePage() {
             )}
           </div>
 
-          <div className="rounded-2xl border border-border dark:border-white/10 bg-surface dark:bg-night-500 p-4 space-y-2">
-            <h2 className="text-sm font-semibold text-ink flex items-center gap-2">
-              <Code2 className="h-4 w-4 text-coral-500" /> Templates
+          <div className="rounded-xl border border-border dark:border-white/10 bg-surface dark:bg-night-500 p-4 space-y-2">
+            <h2 className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-tertiary flex items-center gap-2">
+              <Code2 className="h-3.5 w-3.5 text-coral-500" /> Templates
             </h2>
             <div className="flex flex-wrap gap-1.5">
               {TEMPLATES.map((template) => (
@@ -211,7 +211,7 @@ export default function WorkspacePage() {
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               maxLength={120}
-              className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-border dark:border-white/10 bg-surface dark:bg-night-500 text-sm text-ink outline-none focus:ring-2 focus:ring-coral-500"
+              className="flex-1 min-w-0 px-3 py-2.5 rounded-lg border border-border dark:border-white/10 bg-surface dark:bg-night-500 text-sm text-ink outline-none focus:ring-2 focus:ring-coral-500"
               placeholder="Snippet title"
             />
             <div className="flex gap-2">

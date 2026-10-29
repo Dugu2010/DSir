@@ -42,13 +42,13 @@ export default function ForgotPasswordPage() {
           </span>
         </Link>
 
-        <div className="rounded-3xl border border-border dark:border-white/5 bg-surface dark:bg-night-500 p-8">
+        <div className="rounded-xl border border-border dark:border-white/10 bg-surface dark:bg-night-500 p-8">
           {sent ? (
             <div className="text-center">
-              <div className="h-14 w-14 rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+              <div className="h-14 w-14 rounded-lg bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
                 <CheckCircle2 className="h-7 w-7 text-emerald-500" />
               </div>
-              <h1 className="font-display text-2xl font-semibold text-ink">Check your inbox</h1>
+              <h1 className="font-display text-2xl font-medium text-ink">Check your inbox</h1>
               <p className="text-sm text-ink-secondary mt-2">
                 If an account exists for <span className="font-medium text-ink">{email}</span>, we&apos;ve sent a password reset link.
               </p>
@@ -63,8 +63,10 @@ export default function ForgotPasswordPage() {
             </div>
           ) : (
             <>
-              <p className="eyebrow mb-4">Account recovery</p>
-              <h1 className="font-display text-2xl font-semibold text-ink">Forgot your password?</h1>
+              <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-coral-600 dark:text-coral-400 mb-4">
+                {"// "}Account recovery
+              </p>
+              <h1 className="font-display text-2xl font-medium text-ink">Forgot your password?</h1>
               <p className="text-sm text-ink-secondary mt-2">
                 Enter your email and we&apos;ll send you a reset link.
               </p>

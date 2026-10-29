@@ -50,22 +50,29 @@ export default function PracticePage() {
   return (
     <div className="max-w-7xl mx-auto space-y-8">
       {/* Hero */}
-      <div className="relative overflow-hidden rounded-3xl bg-ink dark:bg-night-500 border border-border dark:border-white/5 p-8 md:p-10 text-paper-50 dark:text-ink">
+      <header className="relative overflow-hidden rounded-xl border border-border dark:border-white/10 bg-surface dark:bg-night-500">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-coral-500/60 to-transparent" aria-hidden="true" />
-        <p className="eyebrow mb-3 !text-coral-400">No. 04 — Practice</p>
-        <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:justify-between">
-          <div>
-            <h1 className="font-display text-3xl md:text-4xl font-semibold tracking-tight">Practice Hub</h1>
-            <p className="text-paper-50/70 dark:text-ink-secondary mt-1 max-w-xl">Sharpen your skills with hands-on coding exercises.</p>
+        <div className="p-6 md:p-10">
+          <p className="font-mono text-[11px] uppercase tracking-[0.18em] text-coral-600 dark:text-coral-400 mb-4">
+            — No. 04 — Practice terminal
+          </p>
+          <div className="flex flex-col sm:flex-row sm:items-end gap-4 sm:justify-between">
+            <div>
+              <h1 className="font-display text-3xl md:text-5xl font-medium tracking-tight leading-[1.08] text-ink">
+                Practice{" "}
+                <span className="italic text-coral-600 dark:text-coral-400">Hub.</span>
+              </h1>
+              <p className="text-ink-secondary mt-3 max-w-xl">Sharpen your skills with hands-on coding exercises.</p>
+            </div>
+            <Link
+              href="/practice/workspace"
+              className="inline-flex items-center justify-center gap-2 shrink-0 h-11 px-5 rounded-full bg-coral-500 text-sm font-medium text-white hover:bg-coral-600 transition-colors"
+            >
+              <TerminalSquare className="h-4 w-4" aria-hidden="true" /> Open Workspace
+            </Link>
           </div>
-          <Link
-            href="/practice/workspace"
-            className="inline-flex items-center justify-center gap-2 shrink-0 rounded-xl bg-coral-500 px-4 py-2.5 text-sm font-semibold text-night-600 hover:bg-coral-400 transition-colors"
-          >
-            <TerminalSquare className="h-4 w-4" /> Open workspace
-          </Link>
         </div>
-      </div>
+      </header>
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter exercises">
@@ -76,7 +83,7 @@ export default function PracticePage() {
             aria-pressed={difficulty === d}
             className={`px-3 py-1.5 rounded-full text-xs font-mono font-medium transition-all ${
               difficulty === d
-                ? "bg-coral-500 text-night-600"
+                ? "bg-coral-500 text-white"
                 : "bg-surface-tertiary text-ink-secondary hover:text-ink hover:bg-coral-50 dark:hover:bg-coral-500/10 dark:hover:text-coral-400 border border-border dark:border-white/10"
             }`}
           >
@@ -91,7 +98,7 @@ export default function PracticePage() {
             aria-pressed={exerciseType === t}
             className={`px-3 py-1.5 rounded-full text-xs font-mono font-medium transition-all ${
               exerciseType === t
-                ? "bg-coral-500 text-night-600"
+                ? "bg-coral-500 text-white"
                 : "bg-surface-tertiary text-ink-secondary hover:text-ink hover:bg-coral-50 dark:hover:bg-coral-500/10 dark:hover:text-coral-400 border border-border dark:border-white/10"
             }`}
           >
@@ -122,7 +129,7 @@ export default function PracticePage() {
               <Link key={ex.id} href={`/practice/${ex.id}`} className="group block">
                 <Card hover padding="md" className="h-full">
                   <div className="flex items-start justify-between mb-3">
-                    <div className="h-10 w-10 rounded-xl bg-coral-50 dark:bg-coral-500/10 flex items-center justify-center">
+                    <div className="h-10 w-10 rounded-lg border border-border dark:border-white/10 bg-surface-secondary dark:bg-white/5 flex items-center justify-center">
                       <Icon className="h-5 w-5 text-coral-600 dark:text-coral-400" />
                     </div>
                     <div className="flex gap-1.5">
@@ -131,9 +138,9 @@ export default function PracticePage() {
                       </Badge>
                     </div>
                   </div>
-                  <h3 className="font-display font-semibold text-ink mb-1 group-hover:text-coral-700 dark:group-hover:text-coral-400 transition-colors">{ex.title}</h3>
+                  <h3 className="font-display font-medium text-lg leading-snug text-ink mb-1 group-hover:text-coral-700 dark:group-hover:text-coral-400 transition-colors">{ex.title}</h3>
                   <p className="text-sm text-ink-secondary line-clamp-2 mb-3">{ex.description}</p>
-                  <div className="flex items-center gap-3 text-xs text-ink-tertiary">
+                  <div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-wide text-ink-tertiary">
                     <span className="flex items-center gap-1">
                       <Star className="h-3 w-3" /> {ex.points} XP
                     </span>
@@ -151,8 +158,8 @@ export default function PracticePage() {
                       ))}
                     </div>
                   )}
-                  <div className="mt-4 flex items-center gap-1 text-sm font-medium text-coral-600 dark:text-coral-400">
-                    Start Exercise <ArrowRight className="h-3.5 w-3.5" />
+                  <div className="mt-4 pt-3 border-t border-border dark:border-white/10 flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-coral-600 dark:text-coral-400">
+                    Start Exercise <ArrowRight className="h-3 w-3" />
                   </div>
                 </Card>
               </Link>
