@@ -37,6 +37,19 @@ async def lifespan(app: FastAPI):
             "Set JWT_SECRET_KEY (or JWT_SECRET) in your .env file to avoid "
             "forgable tokens.",
         )
+
+    # CORS origins are deployment configuration, not source code. Warn loudly
+    # if the service is still running with the local-only default.
+    if settings.ENVIRONMENT.lower() == "production" and all(
+        "localhost" in origin or "127.0.0.1" in origin
+        for origin in settings.CORS_ORIGINS
+    ):
+        logger.warning(
+            "CORS_ORIGINS has no production origin; browser requests will be blocked. "
+            "Set CORS_ORIGINS to a JSON array in the environment, e.g. "
+            '["https://dsir.dpdns.org"].',
+        )
+
     try:
         yield
     finally:

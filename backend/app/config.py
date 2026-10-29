@@ -75,14 +75,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_AUTH: int = 10
     RATE_LIMIT_AUTH_WINDOW: int = 60
 
-    # CORS
-    CORS_ORIGINS: list[str] = [
-        "http://localhost:3000",
-        "https://dsir-umber.vercel.app",
-        "https://dsir.vercel.app",
-        "https://dsir.dshost.dpdns.org",
-        "https://api.dshost.dpdns.org",
-    ]
+    # CORS — allowed browser origins. Set CORS_ORIGINS as a JSON array in the
+    # deployment environment (e.g. '["https://dsir.dpdns.org"]'). The default
+    # covers local development only; production origins stay out of source.
+    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
 
     # Logging
     LOG_LEVEL: str = "INFO"
