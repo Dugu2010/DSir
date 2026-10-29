@@ -1,7 +1,8 @@
-from pydantic import AliasChoices, Field, model_validator
-from pydantic_settings import BaseSettings
+import json
+from pydantic import AliasChoices, Field, field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Annotated, Any, Optional
 
 
 class Settings(BaseSettings):
@@ -75,10 +76,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_AUTH: int = 10
     RATE_LIMIT_AUTH_WINDOW: int = 60
 
-    # CORS — allowed browser origins. Set CORS_ORIGINS as a JSON array in the
-    # deployment environment (e.g. '["https://dsir.dpdns.org"]'). The default
-    # covers local development only; production origins stay out of source.
-    CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+    # CORS — allowed browser origins. Set CORS_ORIGINS in the deployment
+    # environment as a JSON array or a comma-separated list
+    # (e.g. https://dsir.dpdns.org). The default covers local development only.
+    CORS_ORIGINS: Annotated[list[str], NoDecode] = ["http://localhost:3000"]
 
     # Logging
     LOG_LEVEL: str = "INFO"
@@ -104,6 +105,27 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = True
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, value: Any) -> list[str]:
+        """Accept a JSON array or a plain comma-separated list of origins."""
+        if value is None:
+            return ["http://localhost:3000"]
+        if isinstance(value, str):
+            value = value.strip()
+            if not value:
+                return []
+            try:
+                parsed = json.loads(value)
+            except json.JSONDecodeError:
+                parsed = value.split(",")
+            if isinstance(parsed, str):
+                parsed = [parsed]
+            if not isinstance(parsed, list):
+                return []
+            return [str(item).strip().strip("'\"") for item in parsed if str(item).strip()]
+        return value
 
     @model_validator(mode="before")
     @classmethod
